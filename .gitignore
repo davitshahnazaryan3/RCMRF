@@ -1,0 +1,6 @@
+
+database/*
+.idea/*
+__pycache__/*
+analysis/__pycache__/'
+client/__pycache__/'
