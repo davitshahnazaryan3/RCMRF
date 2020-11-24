@@ -301,7 +301,7 @@ class Model:
         # Check whether Pdelta forces were provided (if not, skips step)
         if 'pdelta' in list(self.loads['Pattern']):
             # Material definition
-            pdelta_mat_tag = 300000 if self.hingeModel == 'haselton' else self.g.nbays + 2
+            pdelta_mat_tag = 300000 if self.hingeModel == 'haselton' else int(self.g.nbays + 2)
             if self.system == 'Perimeter':
                 op.uniaxialMaterial('Elastic', pdelta_mat_tag, young_modulus)
 

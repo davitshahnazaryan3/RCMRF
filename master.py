@@ -198,4 +198,4 @@ if __name__ == "__main__":
     m.run_model()
     m.wipe()
 
-    # get_time(start_time)
+    get_time(start_time)
