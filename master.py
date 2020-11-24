@@ -1,5 +1,10 @@
 """
 Master file to run OpenSees
+It is recommended to run each analysis separately with the order being:
+1. Static analysis - ST
+2. Modal analysis - MA
+3. Static pushover analysis - PO
+4. Nonlinear time history analysis - TH (supports IDA only for now)
 """
 import openseespy.opensees as ops
 from client.model import Model
@@ -19,9 +24,9 @@ class Master:
         :param sections_file: str                   Name of file containing section data in '*.csv' format
         :param loads_file: str                      Name of file containing load data in '*.csv' format
         :param materials_file: dict                 Concrete and reinforcement material properties
-        :param outputsDir: str
-        :param gmdir: str
-        :param gmfileNames: list(str)
+        :param outputsDir: str                      Directory for exporting the analyses results
+        :param gmdir: str                           Ground motion directory
+        :param gmfileNames: list(str)               Files containing information on ground motion files (check sample)
         :param IM_type: int                         Intensity measure tag for IDA
         :param max_runs: int                        Maximum number of runs for IDA
         :param analysis_time_step: float            Analysis time step for IDA
@@ -47,6 +52,7 @@ class Master:
         self.drift_capacity = drift_capacity
         self.analysis_type = analysis_type
         self.system = system
+        self.hingeModel = hingeModel.lower()
         self.APPLY_GRAVITY_ELF = False
         self.FIRST_INT = .05
         self.INCR_STEP = .05
@@ -56,7 +62,6 @@ class Master:
         self.NAME_Y_FILE = gmdir / gmfileNames[1]
         self.DTS_FILE = gmdir / gmfileNames[2]
         self.DURS_FILE = gmdir / gmfileNames[3]
-        self.hingeModel = hingeModel
         # Create an outputs directory if none exists
         self.createFolder(outputsDir)
 
@@ -88,6 +93,7 @@ class Master:
         """
         m = Model(self.analysis_type, self.sections_file, self.loads_file, self.materials_file, self.outputsDir,
                   self.system, hingeModel=self.hingeModel)
+        # Generate the model if specified
         if generate_model:
             m.model()
         return m
@@ -99,20 +105,22 @@ class Master:
         """
         # Create model
         if "TH" in self.analysis_type or "timehistory" in self.analysis_type or "IDA" in self.analysis_type:
+            # Do not generate model if NLTHA is run
             m = self.call_model(generate_model=False)
         else:
             m = self.call_model()
 
         # Run analysis and record the goodies
         if self.analysis_type is None or -1 in self.analysis_type or not self.analysis_type:
+            # Checks the integrity of the files for any sources of error
             self.analysis_type = []
             print("[CHECK] Checking the integrity of the model")
             m.perform_analysis()
             print("[SUCCESS] Integrity of model verified")
 
         elif "PO" in self.analysis_type or "pushover" in self.analysis_type:
-
             try:
+                # Static pushover analysis needs to be run after modal analysis
                 with open(self.outputsDir / "MA.json") as f:
                     modal_analysis_outputs = json.load(f)
                 m.perform_analysis(spo_pattern=2, mode_shape=modal_analysis_outputs["Mode1"])
@@ -120,13 +128,14 @@ class Master:
             except:
                 print("[WARNING] 1st Mode-proportional loading was selected. MA outputs are missing! "
                       "\nRunning with triangular pattern")
-
                 m.perform_analysis(spo_pattern=1)
 
         elif "ELF" in self.analysis_type or "ELFM" in self.analysis_type and self.APPLY_GRAVITY_ELF:
+            # Equivalent lateral force method of analysis
             m.perform_analysis()
 
         elif "TH" in self.analysis_type or "timehistory" in self.analysis_type or "IDA" in self.analysis_type:
+            # Nonlinear time history analysis
             print("[INITIATE] IDA started")
             try:
                 with open(self.outputsDir / "MA.json") as f:
@@ -154,15 +163,15 @@ class Master:
             print("[SUCCESS] IDA done")
 
         else:
+            # Runs static or modal analysis
             m.define_loads(m.elements)
             m.perform_analysis(damping=self.DAMPING)
 
-        # Record outputs
+        # Record outputs (cache)
         if not bool(m.results):
             pass
         else:
-            directory = self.outputsDir / "results.pkl"
-            with open(directory, "wb") as handle:
+            with open(self.outputsDir / "results.pkl", "wb") as handle:
                 pickle.dump(m.results, handle)
 
 
@@ -178,24 +187,32 @@ if __name__ == "__main__":
         print('Running time: ', truncate(elapsed / float(60), 2), ' minutes')
 
     import timeit
-    directory = Path.cwd().parents[0] / ".applications/case1/Output"
-
     start_time = timeit.default_timer()
 
+    # Directories
+    directory = Path.cwd().parents[0] / ".applications/case1/Output"
     materials_file = directory / "materials.csv"
     section_file = directory / "hinge_models.csv"
     loads_file = directory / "action.csv"
-    analysis_type = ["ST"]
-    hingeModel = "Hysteretic"
-    outputsDir = directory / "RCMRF/archive"
+    outputsDir = directory / "RCMRF"
+    
     # GM directory
     gmdir = Path.cwd() / "groundMotion"
     gmfileNames = ["GMR_names1.txt", "GMR_names2.txt", "GMR_dts.txt", "GMR_durs.txt"]
 
+    # RCMRF inputs
+    hingeModel = "Hysteretic"
+    analysis_type = ["MA"]
+
+    # Let's go...
     m = Master(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
                analysis_type=analysis_type, system="Perimeter",  hingeModel=hingeModel)
+
     m.wipe()
     m.run_model()
+
+    # Wipe the model
     m.wipe()
 
+    # Time it
     get_time(start_time)

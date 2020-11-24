@@ -14,16 +14,24 @@ class Geometry:
         """
         self.sections = sections
         self.hingeModel = hingeModel.lower()
+
+        # Get the number of storeys and bays in the direction of seismic action
         if self.hingeModel == 'haselton':
             self.nst = max(self.sections['Storey'])
             self.nbays = int(len(self.sections[(self.sections['Element'] == 'Column')]) / self.nst - 1)
         else:
             self.nst = self.sections['Storey'].max()
             self.nbays = self.sections['Bay'].max() - 1
+
+        # Heights and widths of the structure
         self.heights = np.array([0])
         self.widths = np.array([0])
+
+        # Disaggregate beam and column sections
         self.beams = self.sections[(self.sections['Element'] == 'Beam')]
         self.columns = self.sections[(self.sections['Element'] == 'Column')]
+
+        # Bottom and top nodes for the recorders
         self.bnode = []
         self.tnode = []
         for st in range(self.nst):

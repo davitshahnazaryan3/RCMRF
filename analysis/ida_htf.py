@@ -20,11 +20,11 @@ class IDA_HTF:
                                                     1. PGA
                                                     2. Sa at a given period (e.g. Sa(T1)), geometric mean of two record
                                                     Sa(T) as the IM
-                                                    3. todo, add more (as necessary)
+                                                    3. more to be added
         :param T_info: list                         List of period info required by specified IM
                                                     1. [], will ignore any entries if present
                                                     2. [1.0], single value of period to condition to
-                                                    3. todo, add more (as necessary)
+                                                    3. more to be added
         :param xi: float                            Elastic damping, typically 0.05
         :param omegas: list                         Circular frequences
         :param dt: float                            Analysis time step

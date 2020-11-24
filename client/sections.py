@@ -29,15 +29,22 @@ class Sections:
         :param eleID: int                           Element identification
         :param nodeR: int                           Retained/master node
         :param nodeC: int                           Constrained/slave node
-        :param K: float                             Initial stiffness after the modification for n (see Ibarra and Krawinkler, 2005)
-        :param asPos: float                         Strain hardening ratio after n modification (see Ibarra and Krawinkler, 2005)
-        :param asNeg: float                         Strain hardening ratio after n modification (see Ibarra and Krawinkler, 2005)
+        :param K: float                             Initial stiffness after the modification for n (see Ibarra and
+                                                                                                    Krawinkler, 2005)
+        :param asPos: float                         Strain hardening ratio after n modification (see Ibarra and
+                                                                                                    Krawinkler, 2005)
+        :param asNeg: float                         Strain hardening ratio after n modification (see Ibarra and
+                                                                                                    Krawinkler, 2005)
         :param MyPos: float                         Positive yield moment (with sign)
         :param MyNeg: float                         Negative yield moment (with sign)
-        :param LS: float                            Basic strength deterioration parameter (see Lignos and Krawinkler, 2009)
-        :param LK: float                            Unloading stiffness deterioration parameter (see Lignos and Krawinkler, 2009)
-        :param LA: float                            Accelerated reloading stiffness deterioration parameter (see Lignos and Krawinkler, 2009)
-        :param LD: float                            Post-capping strength deterioration parameter (see Lignos and Krawinkler, 2009)
+        :param LS: float                            Basic strength deterioration parameter (see Lignos and
+                                                                                                    Krawinkler, 2009)
+        :param LK: float                            Unloading stiffness deterioration parameter (see Lignos and
+                                                                                                    Krawinkler, 2009)
+        :param LA: float                            Accelerated reloading stiffness deterioration parameter
+                                                                                    (see Lignos and Krawinkler, 2009)
+        :param LD: float                            Post-capping strength deterioration parameter
+                                                                                    (see Lignos and Krawinkler, 2009)
         :param cS: float                            Exponent for basic strength deterioration
         :param cK: float                            Exponent for unloading stiffness deterioration
         :param cA: float                            Exponent for accelerated reloading stiffness deterioration
@@ -154,10 +161,15 @@ class Sections:
         :param transfTag: int                       Element transformation tag
         :return:
         """
+        # Bay and storey levels
         bay = ele['Bay']
         st = ele['Storey']
+        # Cross-section area of the element
         area = ele['b'] * ele['h']
+        # Moment of inertia of the cross-section
         iz = ele['b'] * ele['h'] ** 3 / 12
+
+        # Node IDs connecting the elements
         if ele['Element'].lower() == 'beam':
             eleTag = f"1{bay}{st}"
             iNode = int(f"{bay}{st}")
@@ -166,23 +178,33 @@ class Sections:
             eleTag = f"2{bay}{st}"
             iNode = int(f"{bay}{st - 1}")
             jNode = int(f"{bay}{st}")
+
+        # Material tags
         matTag1 = int('101' + eleTag)
         matTag2 = int('102' + eleTag)
         intTag = int('105' + eleTag)
         phTag1 = int('106' + eleTag)
         phTag2 = int('107' + eleTag)
+
+        # Integration tag
         integrationTag = int('108' + eleTag)
+
+        # Some additional parameters for the hysteretic model
         pinchX = 0.8
         pinchY = 0.5
         damage1 = 0.0
         damage2 = 0.0
         beta = 0.0
+
+        # Creating the hinges at both ends (equivalent assumption)
         op.uniaxialMaterial('Hysteretic', matTag1, ele['m1'], ele['phi1'], ele['m2'], ele['phi2'], ele['m3'],
                             ele['phi3'], -ele['m1Neg'], -ele['phi1Neg'], -ele['m2Neg'], -ele['phi2Neg'], -ele['m3Neg'],
                             -ele['phi3Neg'], pinchX, pinchY, damage1, damage2, beta)
         op.uniaxialMaterial('Hysteretic', matTag2, ele['m1'], ele['phi1'], ele['m2'], ele['phi2'], ele['m3'],
                             ele['phi3'], -ele['m1Neg'], -ele['phi1Neg'], -ele['m2Neg'], -ele['phi2Neg'], -ele['m3Neg'],
                             -ele['phi3Neg'], pinchX, pinchY, damage1, damage2, beta)
+
+        # Elastic section
         op.section('Elastic', intTag, float(self.materials['Ec']) * 1000.0, area, iz)
         op.section('Uniaxial', phTag1, matTag1, 'Mz')
         op.section('Uniaxial', phTag2, matTag2, 'Mz')
