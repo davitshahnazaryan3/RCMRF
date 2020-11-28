@@ -1,5 +1,8 @@
 """
 Performs nonlinear time history analysis
+Displacements are in m
+Accelerations are in g
+Drifts are in %
 """
 import openseespy.opensees as op
 import numpy as np, warnings
@@ -23,7 +26,7 @@ class SolutionAlgorithm:
         self.bnode = np.array(bnode)
         self.pflag = pflag
         self.TEST_TYPE = 'NormDispIncr'
-        self.TOL = 1e-08
+        self.TOL = 1e-07
         self.ITER = 50
         self.ALGORITHM_TYPE = 'KrylovNewton'
         self.c_index = 0
@@ -52,9 +55,10 @@ class SolutionAlgorithm:
 
         # Set up the storey drift and acceleration values
         h = np.array([])
-        mdrift = np.array([])
-        maccel = np.array([])
         nst = len(self.tnode)
+        # maccel = np.zeros((nst+1, ))
+        mdrift = np.zeros((nst, ))
+
         # Recorders for displacements, accelerations and drifts
         displacements = np.zeros((nst + 1, 1))
         accelerations = np.zeros((nst + 1, 1))
@@ -68,15 +72,18 @@ class SolutionAlgorithm:
 
             bdg_h = bdg_h + dist
             h = np.append(h, dist)
-            mdrift = np.append(mdrift, 0.0)
-            maccel = np.append(maccel, 0.0)
+
             if dist == 0:
                 warnings.warn('[WARNING] Zerolength found in drift check.')
 
+        # Run the actual analysis now
         while self.c_index == 0 and control_time <= self.tmax and ok == 0:
             # Start analysis
             ok = op.analyze(1, self.dt)
             control_time = op.getTime()
+
+            # If the analysis fails, try the following changes to achieve convergence
+            # Analysis will be slower in here though...
 
             if ok != 0:
                 if self.pflag:
@@ -112,7 +119,8 @@ class SolutionAlgorithm:
                 op.algorithm(self.ALGORITHM_TYPE)
             if ok != 0:
                 if self.pflag:
-                    print(f"[FAILURE] Failed at {control_time} - Trying Newton with initial tangent & relaxed convergence...")
+                    print(f"[FAILURE] Failed at {control_time} - Trying Newton with initial tangent & relaxed "
+                          f"convergence...")
                 op.test('NormDispIncr', self.TOL * 0.1, self.ITER * 50)
                 op.algorithm('Newton', '-initial')
                 ok = op.analyze(1, self.dt)
@@ -128,7 +136,8 @@ class SolutionAlgorithm:
                 op.algorithm(self.ALGORITHM_TYPE)
             if ok != 0:
                 if self.pflag:
-                    print(f"[FAILURE] Failed at {control_time} - Trying Newton with initial tangent, reduced timestep & relaxed convergence...")
+                    print(f"[FAILURE] Failed at {control_time} - Trying Newton with initial tangent, reduced timestep &"
+                          f" relaxed convergence...")
                 op.test('NormDispIncr', self.TOL * 0.1, self.ITER * 50)
                 op.algorithm('Newton', '-initial')
                 ok = op.analyze(1, 0.5 * self.dt)
@@ -136,7 +145,8 @@ class SolutionAlgorithm:
                 op.algorithm(self.ALGORITHM_TYPE)
             if ok != 0:
                 if self.pflag:
-                    print(f"[FAILURE] Failed at {control_time} - Trying NewtonWithLineSearch, reduced timestep & relaxed convergence...")
+                    print(f"[FAILURE] Failed at {control_time} - Trying NewtonWithLineSearch, reduced timestep &"
+                          f" relaxed convergence...")
                 op.test('NormDispIncr', self.TOL * 0.1, self.ITER * 50)
                 op.algorithm('NewtonLineSearch', 0.8)
                 ok = op.analyze(1, 0.5 * self.dt)
@@ -151,49 +161,65 @@ class SolutionAlgorithm:
             tempAccel = np.zeros((nst + 1, 1))
             tempDisp = np.zeros((nst + 1, 1))
             tempDrift = np.zeros((nst, 1))
+
+            # Recording EDPs at each storey level to return
             for i in range(nst + 1):
                 if i == nst:
+                    # TODO, add option for recorders to create separate txt files and a recorder with timeseries
+                    #  for accelerations
+                    # Nodal accelerations in g
                     tempAccel[i] = op.nodeAccel(int(self.tnode[(i - 1)]), 1) / 9.81
+                    # Nodal displacements in m
                     tempDisp[i] = op.nodeDisp(int(self.tnode[(i - 1)]), 1)
                 else:
                     tempAccel[i] = op.nodeAccel(int(self.bnode[i]), 1) / 9.81
                     tempDisp[i] = op.nodeDisp(int(self.bnode[i]), 1)
                 if i > 0:
-                    cht = h[(i - 1)]
-                    tempDrift[i - 1] = 100.0 * abs(tempDisp[i] - tempDisp[(i - 1)]) / cht
+                    # Storey height
+                    cht = h[i - 1]
+                    # Storey drifts in %
+                    tempDrift[i - 1] = 100.0 * abs(tempDisp[i] - tempDisp[i - 1]) / cht
 
-            # Appending
+            # Appending into the global numpy arrays to return
             accelerations = np.append(accelerations, tempAccel, axis=1)
             displacements = np.append(displacements, tempDisp, axis=1)
             drifts = np.append(drifts, tempDrift, axis=1)
 
-            # Base accelerations in [g]
-            base_accel = op.nodeAccel(int(self.bnode[0]), 1) / 9.81
-            if base_accel > maccel[0]:
-                maccel[0] = base_accel
+            # # Base accelerations in [g] (this is going to be zero...)
+            # base_accel = op.nodeAccel(int(self.bnode[0]), 1) / 9.81
+            # if base_accel > maccel[0]:
+            #     maccel[0] = base_accel
 
             # Check storey drifts and accelerations
-            for i in range(1, nst):
-                # Drifts
-                tnode_disp = op.nodeDisp(int(self.tnode[(i - 1)]), 1)
-                bnode_disp = op.nodeDisp(int(self.bnode[(i - 1)]), 1)
-                cht = h[(i - 1)]
+            for i in range(1, nst+1):
+                # Top node displacement
+                tnode_disp = op.nodeDisp(int(self.tnode[i - 1]), 1)
+                # Bottom node displacement
+                bnode_disp = op.nodeDisp(int(self.bnode[i - 1]), 1)
+                # Storey height
+                cht = h[i - 1]
+                # Storey drift in %
                 cdrift = 100.0 * abs(tnode_disp - bnode_disp) / cht
-                if cdrift >= mdrift[(i - 1)]:
+                # Record the peak storey drifts
+                if cdrift >= mdrift[i - 1]:
                     mdrift[i - 1] = cdrift
 
                 if cdrift >= mdrift_init:
                     mdrift_init = cdrift
 
-                # Accelerations
-                node_accel = op.nodeAccel(int(self.tnode[(i - 1)]), 1) / 9.81
-                caccel = 1.0 * abs(node_accel)
-                if caccel >= maccel[i]:
-                    maccel[i] = caccel
+                # # Accelerations in g (this is not quite important)
+                # node_accel = op.nodeAccel(int(self.tnode[i - 1]), 1) / 9.81
+                # caccel = 1.0 * abs(node_accel)
+                # if caccel >= maccel[i]:
+                #     maccel[i] = caccel
 
+            # Check whether drift capacity has been exceeded
             if mdrift_init >= self.dc:
+                # If it was exceeded then local structure collapse is assumed
                 self.c_index = 1
+                # Hard cap the mdrift_init value to the drift capacity
                 mdrift_init = self.dc
+                # Wipe the model
                 op.wipe()
 
         if self.c_index == -1:

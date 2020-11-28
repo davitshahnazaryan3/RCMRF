@@ -4,6 +4,7 @@ Incremental Dynamic Analysis using Hunt, Trace and Fill algorithm
 import openseespy.opensees as op
 import numpy as np, pandas as pd
 from analysis.solutionAlgorithm import SolutionAlgorithm
+from analysis.static import Static
 from client.model import Model
 
 
@@ -65,6 +66,8 @@ class IDA_HTF:
         self.TSTAGX = 51
         self.TSTAGY = 52
         self.outputs = {}
+        # Initialize intensity measures
+        self.IM_output = None
 
     def call_model(self, generate_model=True):
         """
@@ -73,10 +76,16 @@ class IDA_HTF:
         :param generate_model: bool                         Generate model or not
         :return: class                                      Object Model
         """
-        m = Model(self.analysis_type, self.sections_file, self.loads_file, self.materials, None, self.system, self.hingeModel)
+        m = Model(self.analysis_type, self.sections_file, self.loads_file, self.materials, None, self.system,
+                  self.hingeModel)
         if generate_model:
+            # Create the nonlinear model
             m.model()
+            # Define gravity loads
             m.define_loads(m.elements)
+            # Run static analysis
+            s = Static()
+            s.static_analysis()
         return m
 
     def read_text_file(self, name, col):
@@ -106,7 +115,9 @@ class IDA_HTF:
                                                     sd - spectral displacement in m
                                                     pga - peak ground acceleration in g
         """
+        # Read the acceleration time series
         accg = self.read_text_file(eq, 0)
+
         if T == 0.0:
             pga = 0.0
             for i in range(len(accg)):
@@ -117,19 +128,19 @@ class IDA_HTF:
 
         else:
             # Initialize
+            # Newmark terms (Set for Average Acceleration method)
             gamma = 0.5
             beta = 0.25
+            # Set the mass to 1kg
             ms = 1.0
-            acc = np.array([])
-            p = np.array([])
-            for i in range(len(accg)):
-                acc = np.append(acc, accg[i] * self.g)
-                p = np.append(p, -ms * acc[i])
+
+            # Change the units of the record to m/s2
+            acc = accg * self.g
+            # Create the force in N
+            p = -ms * acc
 
             # Create time vector
-            t = np.array([0.0])
-            for i in range(len(acc) - 1):
-                t = np.append(t, t[i] + dt)
+            t = np.arange(0., (len(acc)-1)*dt, dt)
 
             # Calculate the initial values
             # Stiffness in N/m
@@ -137,7 +148,7 @@ class IDA_HTF:
             # Circular frequency
             w = np.power(k / ms, 0.5)
             # Damping coefficient
-            c = 2 * xi * ms / w
+            c = 2 * xi * ms * w
             # Initial acceleration in m/s2
             a0 = p[0] / ms
             # Stiffness term (see Chopra book)
@@ -158,7 +169,7 @@ class IDA_HTF:
             dp_bar = np.array([])
 
             for i in range(len(t) - 1):
-                dp = np.append(dp, p[(i + 1)] - p[i])
+                dp = np.append(dp, p[i + 1] - p[i])
                 dp_bar = np.append(dp_bar, dp[i] + A * v[i] + B * a[i])
                 du = np.append(du, dp_bar[i] / k_bar)
                 dv = np.append(dv, gamma * du[i] / beta / dt - gamma * v[i] / beta + dt * (1 - gamma / 2 / beta) * a[i])
@@ -216,6 +227,8 @@ class IDA_HTF:
         op.timeSeries('Path', self.TSTAGX, '-dt', dt, '-filePath', str(pathx), '-factor', fx)
         op.timeSeries('Path', self.TSTAGY, '-dt', dt, '-filePath', str(pathy), '-factor', fy)
         op.pattern('UniformExcitation', self.PTAGX, 1, '-accel', self.TSTAGX)
+
+        op.wipeAnalysis()
         op.constraints('Plain')
         op.numberer('Plain')
         op.system('UmfPack')
@@ -230,14 +243,20 @@ class IDA_HTF:
         # Get the ground motion set information
         eqnms_list_x, eqnms_list_y, dts_list, durs_list = self.get_gm()
         nrecs = len(dts_list)
-        
+
+        # Initialize intensity measures (shape)
+        self.IM_output = np.zeros((nrecs, self.max_runs))
+
+        # Loop for each record
         for rec in range(nrecs):
+            # Counting starts from 0
             self.outputs[rec] = {}
             # Get the ground motion set information
             eq_name_x = self.gm_dir / eqnms_list_x[rec]
             eq_name_y = self.gm_dir / eqnms_list_y[rec]
             dt = dts_list[rec]
             dur = self.EXTRA_DUR + durs_list[rec]
+
             # Establish the IM
             if self.IM_type == 1:
                 print('[IDA] IM is the PGA')
@@ -263,69 +282,97 @@ class IDA_HTF:
 
             # Set up the initial indices for HTF
             j = 1
-            IM = np.array([])               # Initialize the list of IM used
-            IMlist = np.array([])           # A list to be used in filling
-            hflag = 1                       # Hunting flag (1 for when we are hunting)
-            tflag = 0                       # Tracing flag (0 at first)
-            fflag = 0                       # Filling flag (0 at first)
-            jhunt = 0   # todo, Possible issue for debugging
+            IM = np.zeros((self.max_runs, ))                # Initialize the list of IM used
+            IMlist = np.array([])                           # A list to be used in filling
+            hflag = 1                                       # Hunting flag (1 for when we are hunting)
+            tflag = 0                                       # Tracing flag (0 at first)
+            fflag = 0                                       # Filling flag (0 at first)
+            jhunt = 0                                       # The run number we hunted to
 
+            # The aim is to run NLTHA max_runs times
             while j <= self.max_runs:
                 # As long as hunting flag is 1, meaning that collapse have not been reached
                 if hflag == 1:
                     # Determine the intensity to run at during the hunting
                     if j == 1:
-                        IM = np.append(IM, self.first_int)
+                        # First IM
+                        IM[j - 1] = self.first_int
                     else:
-                        IM = np.append(IM, IM[(j - 2)] + (j - 1) * self.incr_step)
+                        # Subsequent IMs
+                        IM[j - 1] = IM[j - 2] + (j - 1) * self.incr_step
 
                     # Determine the scale factor that needs to be applied to the record
-                    sf_x = IM[(j - 1)] / IM_geomean * self.g
-                    sf_y = IM[(j - 1)] / IM_geomean * self.g
+                    sf_x = IM[j - 1] / IM_geomean * self.g
+                    sf_y = IM[j - 1] / IM_geomean * self.g
+
                     run = f"Record{rec + 1}_Run{j}"
                     if self.pflag:
-                        print(f"[IDA] IM = {IM[(j - 1)]}")
+                        print(f"[IDA] IM = {IM[j - 1]}")
 
                     # The hunting intensity has been determined, now analysis commences
                     self.call_model()
                     self.time_series(dt, eq_name_x, eq_name_y, sf_x, sf_y)
+
                     if self.pflag:
-                        print(f"[IDA] Record: {rec + 1}; Run: {j}; IM: {IM[(j - 1)]}")
+                        print(f"[IDA] Record: {rec + 1}; Run: {j}; IM: {IM[j - 1]}")
 
                     # Commence analysis
                     th = SolutionAlgorithm(self.dt, dur, self.dcap, tnode, bnode, self.pflag)
                     self.outputs[rec][j] = th.ntha_results
-                    j += 1
 
                     # Check the hunted run for collapse
+                    """
+                    c_index = -1                Analysis failed to converge at controltime of Tmax
+                    c_index = 0                 Analysis completed successfully
+                    c_index = 1                 Local structure collapse
+                    """
+                    # Check the hunted run for collapse
                     if th.c_index > 0:
+                        # Collapse is caught, so stop hunting
                         hflag = 0
+                        # Start tracing
                         tflag = 1
-                        j -= 1
+                        # The value of j we hunted to
                         jhunt = j
+                        # Check whether first increment is too large
                         if jhunt == 2:
-                            print(f"[IDA] Warning: {run} - Collapsed achieved on first increment, reduce incremenet...")
+                            print(f"[IDA] Warning: {run} - Collapsed achieved on first increment, reduce increment...")
+                    else:
+                        self.IM_output[rec, j-1] = IM[j - 1]
+                        # increment j
+                        j += 1
                     op.wipe()
 
-                # TODO, this should be elif?
                 # When first collapse is reached, tracing commences between last convergence and the first collapse
                 if tflag == 1:
                     # First phase is to trace the last DeltaIM to get within the resolution
                     if j == jhunt:
+                        # This is the IM of the hunting collapse (IM to cause collapse)
                         firstC = IM[j - 1]
-                        IM[j - 1] = IM[j - 1]  # todo, looks weird, possible future mistake when debugging
-                    diff = firstC - IM[j - 2]  # todo, looks weird, possible future mistake when debugging
+                        # Remove that value of IM from the array
+                        IM[j - 1] = 0.0
 
+                    # Determine the difference between the hunting's noncollapse and collapse IM
+                    diff = firstC - IM[j - 2]
+
+                    # Take 0.2 of the difference
                     inctr = 0.2 * diff
+
+                    # Place a lower threshold on the increment so it doesnt start tracing too fine
                     if inctr < 0.05:
                         inctr = 0.025
 
-                    IMtr = IM[(j - 2)] + inctr
-                    IM = np.append(IM, IMtr)
-                    sf_x = IM[(j - 1)] / IM_geomean * self.g
-                    sf_y = IM[(j - 1)] / IM_geomean * self.g
+                    # Calculate new tracing IM, which is previous noncollapse plus increment
+                    IMtr = IM[j - 2] + inctr
+
+                    IM[j - 1] = IMtr
+                    sf_x = IM[j - 1] / IM_geomean * self.g
+                    sf_y = IM[j - 1] / IM_geomean * self.g
+                    # Record into the outputs file
+                    self.IM_output[rec, j-1] = IMtr
                     run = f"Record{rec + 1}_Run{j}"
 
+                    # The trace intensity has been determined, now we can analyse
                     self.call_model()
                     self.time_series(dt, eq_name_x, eq_name_y, sf_x, sf_y)
                     if self.pflag:
@@ -335,47 +382,57 @@ class IDA_HTF:
                     self.outputs[rec][j] = th.ntha_results
 
                     if th.c_index > 0:
+                        # Stop tracing
                         tflag = 0
+                        # Start filling
                         fflag = 1
+                        # The value of j we traced to
                         jtrace = j
+                        # Get the list of IMs
                         IMlist = IM
                         if j == jhunt:
                             print(f"[IDA] Warning: {run} - First trace for collapse resulted in collapse... ")
                     j += 1
                     op.wipe()
 
-                # When the required resolution is reached, start filling
+                # When the required resolution is reached, start filling until max_runs is reached
                 if fflag == 1:
                     # Reorder the list so we can account for filled runs
                     IMlist = np.sort(IMlist)
 
                     # Determine the biggest gap in IM for the hunted runs
                     gap = 0.0
+                    IMfil = 0.0
                     '''We go to the end of the list minus 1 because, if not we would be filling between a noncollapsing
                     and a collapsing run, for which we are not sure if that filling run would be a non collapse -
                     In short, does away with collapsing fills'''
                     for ii in range(1, len(IMlist) - 1):
                         # Find the running gap of hunted runs
-                        temp = IMlist[ii] - IMlist[(ii - 1)]
+                        temp = IMlist[ii] - IMlist[ii - 1]
                         if temp > gap:
+                            # Update to maximum gap
                             gap = temp
                             # Determine new filling IM
-                            IMfil = IMlist[(ii - 1)] + gap / 2
+                            IMfil = IMlist[ii - 1] + gap / 2
 
-                    IM = np.append(IM, IMfil)               # todo, for debugging
+                    IM[j-1] = IMfil
                     IMlist = np.append(IMlist, IMfil)
-                    sf_x = IM[(j - 1)] / IM_geomean * self.g
-                    sf_y = IM[(j - 1)] / IM_geomean * self.g
+                    sf_x = IM[j - 1] / IM_geomean * self.g
+                    sf_y = IM[j - 1] / IM_geomean * self.g
+
+                    # Record into the outputs file
+                    self.IM_output[rec, j-1] = IMfil
                     run = f"Record{rec + 1}_Run{j}"
 
                     self.call_model()
                     self.time_series(dt, eq_name_x, eq_name_y, sf_x, sf_y)
                     if self.pflag:
-                        print(f"[IDA] Record: {rec + 1}; Run: {j}; IM: {IMtr}")
+                        print(f"[IDA] Record: {rec + 1}; Run: {j}; IM: {IMfil}")
 
                     th = SolutionAlgorithm(self.dt, dur, self.dcap, tnode, bnode, self.pflag)
                     self.outputs[rec][j] = th.ntha_results
 
+                    # Increment run number
                     j += 1
                     op.wipe()
 

@@ -230,7 +230,8 @@ class Model:
                 node_j = int(f"{self.sections['Storey'][ele] + 1}{self.sections['Bay'][ele]}10")
                 area = self.sections['b'][ele] * self.sections['h'][ele]
                 inertia = self.sections['b'][ele] * self.sections['h'][ele] ** 3 / 12
-                op.element('elasticBeamColumn', eleid, node_i, node_j, area, young_modulus, inertia, self.COL_TRANSF_TAG)
+                op.element('elasticBeamColumn', eleid, node_i, node_j, area, young_modulus, inertia,
+                           self.COL_TRANSF_TAG)
                 if self.sections['Bay'][ele] in (1, self.g.nbays + 1):
                     elements['Columns external'][self.sections['Storey'][ele]].append(eleid)
                 else:
@@ -242,7 +243,8 @@ class Model:
                 node_j = int(f"{self.sections['Storey'][ele] + 1}{self.sections['Bay'][ele]}10")
                 area = self.sections['b'][ele] * self.sections['h'][ele]
                 inertia = self.sections['b'][ele] * self.sections['h'][ele] ** 3 / 12
-                op.element('elasticBeamColumn', eleid, node_i, node_j, area, young_modulus, inertia, self.COL_TRANSF_TAG)
+                op.element('elasticBeamColumn', eleid, node_i, node_j, area, young_modulus, inertia,
+                           self.COL_TRANSF_TAG)
                 if self.sections['Bay'][ele] in (1, self.g.nbays + 1):
                     elements['Columns external'][self.sections['Storey'][ele]].append(eleid)
                 else:
@@ -253,7 +255,8 @@ class Model:
                 node_j = int(f"{self.sections['Storey'][ele] + 1}{self.sections['Bay'][ele] + 1}40")
                 area = self.sections['b'][ele] * self.sections['h'][ele]
                 inertia = self.sections['b'][ele] * self.sections['h'][ele] ** 3 / 12
-                op.element('elasticBeamColumn', eleid, node_i, node_j, area, young_modulus, inertia, self.BEAM_TRANSF_TAG)
+                op.element('elasticBeamColumn', eleid, node_i, node_j, area, young_modulus, inertia,
+                           self.BEAM_TRANSF_TAG)
                 elements['Beams'][self.sections['Storey'][ele]].append(eleid)
 
         print('[SUCCESS] Elements have been defined')

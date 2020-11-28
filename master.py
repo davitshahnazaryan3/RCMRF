@@ -9,6 +9,7 @@ It is recommended to run each analysis separately with the order being:
 import openseespy.opensees as ops
 from client.model import Model
 from pathlib import Path
+import numpy as np
 import os
 import json
 import pickle
@@ -17,7 +18,7 @@ from analysis.ida_htf import IDA_HTF
 
 class Master:
     def __init__(self, sections_file, loads_file, materials_file, outputsDir, gmdir=None, gmfileNames=None, IM_type=2,
-                 max_runs=15, analysis_time_step=.01, drift_capacity=20, analysis_type=None, system="Perimeter",
+                 max_runs=15, analysis_time_step=.01, drift_capacity=10., analysis_type=None, system="Perimeter",
                  hingeModel="Hysteretic"):
         """
         Initializes master file
@@ -143,6 +144,7 @@ class Master:
                     period = results["Periods"][0]
                     damping = results["Damping"][0]
                     omegas = results["CircFreq"]
+
             except:
                 raise ValueError("[EXCEPTION] Static and modal analysis data do not exist.")
 
@@ -159,6 +161,7 @@ class Master:
             # Export results
             with open(self.outputsDir / "IDA.pickle", "wb") as handle:
                 pickle.dump(ida.outputs, handle)
+            np.savetxt(self.outputsDir / "IM.csv", ida.IM_output, delimiter=',')
 
             print("[SUCCESS] IDA done")
 
@@ -194,15 +197,15 @@ if __name__ == "__main__":
     materials_file = directory / "materials.csv"
     section_file = directory / "hinge_models.csv"
     loads_file = directory / "action.csv"
-    outputsDir = directory / "RCMRF"
+    outputsDir = directory / "RCMRF/test"
     
     # GM directory
-    gmdir = Path.cwd() / "groundMotion"
+    gmdir = Path.cwd() / "sample/groundMotion"
     gmfileNames = ["GMR_names1.txt", "GMR_names2.txt", "GMR_dts.txt", "GMR_durs.txt"]
 
     # RCMRF inputs
     hingeModel = "Hysteretic"
-    analysis_type = ["MA"]
+    analysis_type = ["TH"]
 
     # Let's go...
     m = Master(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
