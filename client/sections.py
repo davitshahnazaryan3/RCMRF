@@ -159,7 +159,7 @@ class Sections:
         Creates hysteretic hinges
         :param ele: DataFrame                       Hinge model parameters
         :param transfTag: int                       Element transformation tag
-        :return:
+        :return: None
         """
         # Bay and storey levels
         bay = ele['Bay']
@@ -168,7 +168,6 @@ class Sections:
         area = ele['b'] * ele['h']
         # Moment of inertia of the cross-section
         iz = ele['b'] * ele['h'] ** 3 / 12
-
         # Node IDs connecting the elements
         if ele['Element'].lower() == 'beam':
             eleTag = f"1{bay}{st}"

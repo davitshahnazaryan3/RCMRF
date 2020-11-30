@@ -62,8 +62,8 @@ class Model:
         self.materials = pd.read_csv(materials)
         self.system = system
         self.hingeModel = hingeModel.lower()
-        self.COL_TRANSF_TAG = 1
-        self.BEAM_TRANSF_TAG = 2
+        self.BEAM_TRANSF_TAG = 1
+        self.COL_TRANSF_TAG = 2
         self.NEGLIGIBLE = 1e-09
         self.outputsDir = outputsDir
         self.sections = pd.read_csv(sections_file)
@@ -137,7 +137,7 @@ class Model:
 
         return base_nodes, hinge_nodes
 
-    def define_transformations(self, col_transf_type='PDelta', beam_transf_tag='Linear'):
+    def define_transformations(self, col_transf_type='PDelta', beam_transf_tag='PDelta'):
         """
         Defines geometric transformations for beams and columns (PDelta, Linear, Corotational)
         :param col_transf_type: str                 Column transformation type
@@ -438,13 +438,23 @@ class Model:
         print('[SUCCESS] Recorders have been generated')
         return results
 
-    def define_loads(self, elements, apply_loads=True):
+    def define_loads(self, elements, apply_loads=True, apply_point=False):
         """
         Defines gravity loads provided by the user
         :param elements: dict                           Dictionary containing IDs of all elements
         :param apply_loads: bool                        Whether to apply loads or not
+        :param apply_point: bool                        Whether to apply loads as point loads
         :return: None
         """
+        # If both were set to True, advantage will be given to point loads
+        if apply_point:
+            apply_loads = False
+
+        # For now, point loads are not created for Haselton model, so force distributed loads
+        if self.hingeModel == "haselton":
+            apply_loads = True
+            apply_point = False
+
         if apply_loads:
             op.timeSeries('Linear', 1)
             op.pattern('Plain', 1, 1)
@@ -461,10 +471,31 @@ class Model:
 
             else:
                 for ele in elements['Beams']:
-                    load = distributed[(distributed['Storey'] == int(ele[(-1)]))]['Load'].iloc[0]
+                    load = distributed[(distributed['Storey'] == int(ele[-1]))]['Load'].iloc[0]
                     op.eleLoad('-ele', int(ele), '-type', '-beamUniform', -load)
 
-            print('[SUCCESS] Gravity loads have been defined')
+            print('[SUCCESS] Gravity loads aas distributed loads have been defined')
+
+        if apply_point:
+            op.timeSeries('Linear', 1)
+            op.pattern('Plain', 1, 1)
+            distributed = self.loads[(self.loads['Pattern'] == 'distributed')].reset_index(drop=True)
+
+            for ele in elements['Beams']:
+                # Distributed load
+                load = distributed[(distributed['Storey'] == int(ele[-1]))]['Load'].iloc[0]
+                # Storey and bay levels
+                st = int(ele[-1])
+                bay = int(ele[1])
+                # Bay width
+                w = self.g.beams[(self.g.beams['Bay'] == bay)].iloc[0]['length']
+                # Point load value
+                p = load / 2 * w
+                # Applying the load at both end nodes of the beam
+                op.load(int(f"{bay}{st}"), self.NEGLIGIBLE, -p, self.NEGLIGIBLE)
+                op.load(int(f"{bay+1}{st}"), self.NEGLIGIBLE, -p, self.NEGLIGIBLE)
+
+            print('[SUCCESS] Gravity loads as point loads have been defined')
 
     def perform_analysis(self, elfm_filename=None, **kwargs):
         """
@@ -578,8 +609,8 @@ class Model:
         :return: None
         """
         self.create_model()
-        self.base_nodes, hinge_nodes = self.create_nodes()
         self.define_transformations()
+        self.base_nodes, hinge_nodes = self.create_nodes()
         if self.hingeModel == 'haselton':
             self.joint_materials()
             self.rot_springs(self.base_nodes)

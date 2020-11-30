@@ -104,18 +104,12 @@ class Master:
         Initializes model creator and runs analysis
         :return: None
         """
-        # Create model
-        if "TH" in self.analysis_type or "timehistory" in self.analysis_type or "IDA" in self.analysis_type:
-            # Do not generate model if NLTHA is run
-            m = self.call_model(generate_model=False)
-        else:
-            m = self.call_model()
-
         # Run analysis and record the goodies
         if self.analysis_type is None or -1 in self.analysis_type or not self.analysis_type:
             # Checks the integrity of the files for any sources of error
             self.analysis_type = []
             print("[CHECK] Checking the integrity of the model")
+            m = self.call_model()
             m.perform_analysis()
             print("[SUCCESS] Integrity of model verified")
 
@@ -124,15 +118,18 @@ class Master:
                 # Static pushover analysis needs to be run after modal analysis
                 with open(self.outputsDir / "MA.json") as f:
                     modal_analysis_outputs = json.load(f)
+                m = self.call_model()
                 m.perform_analysis(spo_pattern=2, mode_shape=modal_analysis_outputs["Mode1"])
 
             except:
                 print("[WARNING] 1st Mode-proportional loading was selected. MA outputs are missing! "
                       "\nRunning with triangular pattern")
+                m = self.call_model()
                 m.perform_analysis(spo_pattern=1)
 
         elif "ELF" in self.analysis_type or "ELFM" in self.analysis_type and self.APPLY_GRAVITY_ELF:
             # Equivalent lateral force method of analysis
+            m = self.call_model()
             m.perform_analysis()
 
         elif "TH" in self.analysis_type or "timehistory" in self.analysis_type or "IDA" in self.analysis_type:
@@ -156,7 +153,7 @@ class Master:
                           pflag=True)
 
             # Set-up
-            ida.establish_im(m.g.tnode, m.g.bnode)
+            ida.establish_im()
 
             # Export results
             with open(self.outputsDir / "IDA.pickle", "wb") as handle:
@@ -167,15 +164,9 @@ class Master:
 
         else:
             # Runs static or modal analysis
+            m = self.call_model()
             m.define_loads(m.elements)
             m.perform_analysis(damping=self.DAMPING)
-
-        # Record outputs (cache)
-        if not bool(m.results):
-            pass
-        else:
-            with open(self.outputsDir / "results.pkl", "wb") as handle:
-                pickle.dump(m.results, handle)
 
 
 if __name__ == "__main__":

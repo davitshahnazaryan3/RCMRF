@@ -72,7 +72,7 @@ class SPO:
         op.constraints('Plain')
         op.numberer('RCM')
         op.system('BandGeneral')
-        op.test(self.TEST_TYPE, self.TOL, self.ITERINIT, 0)
+        op.test(self.TEST_TYPE, self.TOL, self.ITERINIT)
         op.algorithm(self.ALGORITHM_TYPE)
         op.integrator('DisplacementControl', self.cntr_node, self.disp_dir, self.dref / self.nstep)
         op.analysis('Static')

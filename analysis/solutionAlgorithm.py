@@ -66,8 +66,8 @@ class SolutionAlgorithm:
         bdg_h = 0.0
         for i in range(1, nst + 1):
             # Find the coordinates of the nodes in Global Y (2)
-            top2 = op.nodeCoord(int(self.tnode[(i - 1)]), 2)
-            bot2 = op.nodeCoord(int(self.bnode[(i - 1)]), 2)
+            top2 = op.nodeCoord(int(self.tnode[i - 1]), 2)
+            bot2 = op.nodeCoord(int(self.bnode[i - 1]), 2)
             dist = top2 - bot2
 
             bdg_h = bdg_h + dist
@@ -134,6 +134,8 @@ class SolutionAlgorithm:
                 ok = op.analyze(1, self.dt)
                 op.test(self.TEST_TYPE, self.TOL, self.ITER)
                 op.algorithm(self.ALGORITHM_TYPE)
+
+            # Next, halve the timestep with both algorithm and tolerance reduction
             if ok != 0:
                 if self.pflag:
                     print(f"[FAILURE] Failed at {control_time} - Trying Newton with initial tangent, reduced timestep &"
@@ -168,9 +170,9 @@ class SolutionAlgorithm:
                     # TODO, add option for recorders to create separate txt files and a recorder with timeseries
                     #  for accelerations
                     # Nodal accelerations in g
-                    tempAccel[i] = op.nodeAccel(int(self.tnode[(i - 1)]), 1) / 9.81
+                    tempAccel[i] = op.nodeAccel(int(self.tnode[i - 1]), 1) / 9.81
                     # Nodal displacements in m
-                    tempDisp[i] = op.nodeDisp(int(self.tnode[(i - 1)]), 1)
+                    tempDisp[i] = op.nodeDisp(int(self.tnode[i - 1]), 1)
                 else:
                     tempAccel[i] = op.nodeAccel(int(self.bnode[i]), 1) / 9.81
                     tempDisp[i] = op.nodeDisp(int(self.bnode[i]), 1)

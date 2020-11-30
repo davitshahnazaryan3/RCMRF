@@ -82,7 +82,7 @@ class IDA_HTF:
             # Create the nonlinear model
             m.model()
             # Define gravity loads
-            m.define_loads(m.elements)
+            m.define_loads(m.elements, apply_point=True)
             # Run static analysis
             s = Static()
             s.static_analysis()
@@ -223,21 +223,22 @@ class IDA_HTF:
         w2 = self.omegas[1]
         a0 = 2 * w1 * w2 / (w2 ** 2 - w1 ** 2) * (w2 * self.xi - w1 * self.xi)
         a1 = 2 * w1 * w2 / (w2 ** 2 - w1 ** 2) * (-self.xi / w2 + self.xi / w1)
+
+        # Rayleigh damping
         op.rayleigh(a0, 0.0, 0.0, a1)
         op.timeSeries('Path', self.TSTAGX, '-dt', dt, '-filePath', str(pathx), '-factor', fx)
-        op.timeSeries('Path', self.TSTAGY, '-dt', dt, '-filePath', str(pathy), '-factor', fy)
+        # op.timeSeries('Path', self.TSTAGY, '-dt', dt, '-filePath', str(pathy), '-factor', fy)
         op.pattern('UniformExcitation', self.PTAGX, 1, '-accel', self.TSTAGX)
 
+        # Delete the old analysis and all it's component objects
         op.wipeAnalysis()
         op.constraints('Plain')
         op.numberer('Plain')
         op.system('UmfPack')
 
-    def establish_im(self, tnode, bnode):
+    def establish_im(self):
         """
         Establishes IM and performs analyses
-        :param tnode: list(int)                     Top node IDs (rightmost nodes)
-        :param bnode: list(int)                     Bottom node IDs (rightmost nodes)
         :return: None
         """
         # Get the ground motion set information
@@ -293,6 +294,7 @@ class IDA_HTF:
             while j <= self.max_runs:
                 # As long as hunting flag is 1, meaning that collapse have not been reached
                 if hflag == 1:
+                    print("[STEP] We join the hunt...")
                     # Determine the intensity to run at during the hunting
                     if j == 1:
                         # First IM
@@ -310,14 +312,13 @@ class IDA_HTF:
                         print(f"[IDA] IM = {IM[j - 1]}")
 
                     # The hunting intensity has been determined, now analysis commences
-                    self.call_model()
+                    m = self.call_model()
                     self.time_series(dt, eq_name_x, eq_name_y, sf_x, sf_y)
-
                     if self.pflag:
                         print(f"[IDA] Record: {rec + 1}; Run: {j}; IM: {IM[j - 1]}")
 
                     # Commence analysis
-                    th = SolutionAlgorithm(self.dt, dur, self.dcap, tnode, bnode, self.pflag)
+                    th = SolutionAlgorithm(self.dt, dur, self.dcap, m.g.tnode, m.g.bnode, self.pflag)
                     self.outputs[rec][j] = th.ntha_results
 
                     # Check the hunted run for collapse
@@ -345,6 +346,7 @@ class IDA_HTF:
 
                 # When first collapse is reached, tracing commences between last convergence and the first collapse
                 if tflag == 1:
+                    print("[STEP] Tracing...")
                     # First phase is to trace the last DeltaIM to get within the resolution
                     if j == jhunt:
                         # This is the IM of the hunting collapse (IM to cause collapse)
@@ -373,12 +375,12 @@ class IDA_HTF:
                     run = f"Record{rec + 1}_Run{j}"
 
                     # The trace intensity has been determined, now we can analyse
-                    self.call_model()
+                    m = self.call_model()
                     self.time_series(dt, eq_name_x, eq_name_y, sf_x, sf_y)
                     if self.pflag:
                         print(f"[IDA] Record: {rec + 1}; Run: {j}; IM: {IMtr}")
 
-                    th = SolutionAlgorithm(self.dt, dur, self.dcap, tnode, bnode, self.pflag)
+                    th = SolutionAlgorithm(self.dt, dur, self.dcap, m.g.tnode, m.g.bnode, self.pflag)
                     self.outputs[rec][j] = th.ntha_results
 
                     if th.c_index > 0:
@@ -396,7 +398,10 @@ class IDA_HTF:
                     op.wipe()
 
                 # When the required resolution is reached, start filling until max_runs is reached
-                if fflag == 1:
+                # Make sure that number of runs are not exceeded
+                if fflag == 1 and j <= self.max_runs:
+                    print("[STEP] Filling the gaps...")
+
                     # Reorder the list so we can account for filled runs
                     IMlist = np.sort(IMlist)
 
@@ -424,12 +429,12 @@ class IDA_HTF:
                     self.IM_output[rec, j-1] = IMfil
                     run = f"Record{rec + 1}_Run{j}"
 
-                    self.call_model()
+                    m = self.call_model()
                     self.time_series(dt, eq_name_x, eq_name_y, sf_x, sf_y)
                     if self.pflag:
                         print(f"[IDA] Record: {rec + 1}; Run: {j}; IM: {IMfil}")
 
-                    th = SolutionAlgorithm(self.dt, dur, self.dcap, tnode, bnode, self.pflag)
+                    th = SolutionAlgorithm(self.dt, dur, self.dcap, m.g.tnode, m.g.bnode, self.pflag)
                     self.outputs[rec][j] = th.ntha_results
 
                     # Increment run number
