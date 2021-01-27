@@ -15,7 +15,7 @@ from analysis.spo import SPO
 class Model:
 
     def __init__(self, analysis_type, sections_file, loads_file, materials, outputsDir, system='Perimeter',
-                 hingeModel='haselton'):
+                 hingeModel='haselton', flag3d=False):
         """
         Initializes OpenSees model creator
         :param analysis_type: list(str)             Type of analysis for which we are recording [TH, PO, ST, MA, ELF]
@@ -54,6 +54,7 @@ class Model:
         :param materials: dict                      Material properties of reinforcement and concrete
         :param system: str                          MRF type, i.e. Perimeter or space
         :param hingeModel: str                      Hinge model type (Haselton (4 nodes) or Hysteretic (2 nodes))
+        :param flag3d: bool                         True for 3D modelling, False for 2D modelling
         """
         self.base_nodes = None
         self.base_cols = None
@@ -62,6 +63,7 @@ class Model:
         self.materials = pd.read_csv(materials)
         self.system = system
         self.hingeModel = hingeModel.lower()
+        self.flag3d = flag3d
         self.BEAM_TRANSF_TAG = 1
         self.COL_TRANSF_TAG = 2
         self.NEGLIGIBLE = 1e-09
@@ -98,6 +100,10 @@ class Model:
         """
         if self.system not in ('Perimeter', 'Space'):
             raise ValueError('[EXCEPTION] Wrong system type provided, should be Perimeter or Space')
+        if self.system == "Space":
+            raise ValueError("[EXCEPTION] Currently space systems not supported!")
+        if self.flag3d and self.hingeModel == "haselton":
+            raise ValueError('[EXCEPTION] Currently 3D modelling with Haselton springs not supported!')
         print('[SUCCESS] Integrity of input arguments checked')
 
     def create_model(self):
@@ -105,7 +111,10 @@ class Model:
         Initiates model creation
         :return: None
         """
-        op.model('Basic', '-ndm', 2, '-ndf', 3)
+        if self.flag3d:
+            op.model('Basic', '-ndm', 3, '-ndf', 6)
+        else:
+            op.model('Basic', '-ndm', 2, '-ndf', 3)
         print('[INITIATE] Model generation started')
 
     def create_nodes(self, fixity='fixed'):
@@ -125,9 +134,20 @@ class Model:
         base_nodes = []
         hinge_nodes = []
         for n in df.index:
-            op.node(int(df['Node id'][n]), df['x'][n], df['z'][n])
+            # Defining nodes
+            if self.flag3d:
+                op.node(int(df['Node id'][n]), df['x'][n], df['y'][n], df['z'][n])
+            else:
+                op.node(int(df['Node id'][n]), df['x'][n], df['z'][n])
+
             if df['z'][n] == 0 and int(df['Node id'][n]) < 10000:
-                op.fix(int(df['Node id'][n]), 1, 1, fix)
+                if self.flag3d:
+                    op.fix(int(df['Node id'][n]), 1, 1, 1, fix, fix, fix)
+                    # TODO, remove this line once updated for a 3D model
+                    op.fixY(0.0, 0, 1, 0, 0, 0, 1)
+                else:
+                    op.fix(int(df['Node id'][n]), 1, 1, fix)
+
                 base_nodes.append(int(df['Node id'][n]))
             elif 0.0 <= df['x'][n] <= max(self.g.widths):
                 if int(df['Node id'][n]) < 10000 and df['z'][n] <= max(self.g.heights):
@@ -147,8 +167,12 @@ class Model:
         if any((tag not in ('PDelta', 'Linear', 'Corotational') for tag in (col_transf_type, beam_transf_tag))):
             raise Exception('[EXCEPTION] Wrong transformation type provided')
         else:
-            op.geomTransf(col_transf_type, self.COL_TRANSF_TAG)
-            op.geomTransf(beam_transf_tag, self.BEAM_TRANSF_TAG)
+            if self.flag3d:
+                op.geomTransf(col_transf_type, self.COL_TRANSF_TAG, 0, 1, 0)
+                op.geomTransf(beam_transf_tag, self.BEAM_TRANSF_TAG, 0, 1, 0)
+            else:
+                op.geomTransf(col_transf_type, self.COL_TRANSF_TAG)
+                op.geomTransf(beam_transf_tag, self.BEAM_TRANSF_TAG)
         print('[SUCCESS] Material Properties have been defined')
 
     def joint_materials(self):
@@ -301,6 +325,7 @@ class Model:
         option = option.lower()
         # Elastic modulus of concrete
         young_modulus = float(self.materials['Ec']) * 1000.0
+
         # Check whether Pdelta forces were provided (if not, skips step)
         if 'pdelta' in list(self.loads['Pattern']):
             # Material definition
@@ -401,7 +426,12 @@ class Model:
                 if self.hingeModel == 'haselton':
                     op.mass(int(f"{st + 2}{bay + 1}10"), m, self.NEGLIGIBLE, self.NEGLIGIBLE)
                 else:
-                    op.mass(int(f"{bay + 1}{st + 1}"), m, self.NEGLIGIBLE, self.NEGLIGIBLE)
+                    # TODO, Modify here for 3D
+                    if self.flag3d:
+                        op.mass(int(f"{bay + 1}{st + 1}"), m, self.NEGLIGIBLE, m, self.NEGLIGIBLE, self.NEGLIGIBLE,
+                                self.NEGLIGIBLE)
+                    else:
+                        op.mass(int(f"{bay + 1}{st + 1}"), m, self.NEGLIGIBLE, self.NEGLIGIBLE)
 
         else:
             print('[SUCCESS] Seismic masses have been defined')
@@ -472,7 +502,11 @@ class Model:
             else:
                 for ele in elements['Beams']:
                     load = distributed[(distributed['Storey'] == int(ele[-1]))]['Load'].iloc[0]
-                    op.eleLoad('-ele', int(ele), '-type', '-beamUniform', -load)
+                    if self.flag3d:
+                        # TODO, modify here for 3D
+                        op.eleLoad('-ele', int(ele), '-type', '-beamUniform', load, self.NEGLIGIBLE)
+                    else:
+                        op.eleLoad('-ele', int(ele), '-type', '-beamUniform', -load)
 
             print('[SUCCESS] Gravity loads aas distributed loads have been defined')
 
@@ -492,8 +526,15 @@ class Model:
                 # Point load value
                 p = load / 2 * w
                 # Applying the load at both end nodes of the beam
-                op.load(int(f"{bay}{st}"), self.NEGLIGIBLE, -p, self.NEGLIGIBLE)
-                op.load(int(f"{bay+1}{st}"), self.NEGLIGIBLE, -p, self.NEGLIGIBLE)
+                if self.flag3d:
+                    # TODO, modify for 3D
+                    op.load(int(f"{bay}{st}"), self.NEGLIGIBLE, self.NEGLIGIBLE, -p, self.NEGLIGIBLE, self.NEGLIGIBLE,
+                            self.NEGLIGIBLE)
+                    op.load(int(f"{bay+1}{st}"), self.NEGLIGIBLE, self.NEGLIGIBLE, -p, self.NEGLIGIBLE, self.NEGLIGIBLE,
+                            self.NEGLIGIBLE)
+                else:
+                    op.load(int(f"{bay}{st}"), self.NEGLIGIBLE, -p, self.NEGLIGIBLE)
+                    op.load(int(f"{bay+1}{st}"), self.NEGLIGIBLE, -p, self.NEGLIGIBLE)
 
             print('[SUCCESS] Gravity loads as point loads have been defined')
 
@@ -531,7 +572,12 @@ class Model:
                 if self.hingeModel == 'haselton':
                     op.load(int(f"{st + 1}{self.g.nbays + 1}"), load, self.NEGLIGIBLE, self.NEGLIGIBLE)
                 else:
-                    op.load(int(f"{self.g.nbays + 1}{st + 1}"), load, self.NEGLIGIBLE, self.NEGLIGIBLE)
+                    if self.flag3d:
+                        op.load(int(f"{self.g.nbays + 1}{st + 1}"), load, self.NEGLIGIBLE, self.NEGLIGIBLE,
+                                self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
+                    else:
+                        op.load(int(f"{self.g.nbays + 1}{st + 1}"), load, self.NEGLIGIBLE, self.NEGLIGIBLE)
+
             else:
                 s = Static()
                 s.static_analysis()
@@ -571,7 +617,7 @@ class Model:
             else:
                 id_ctrl_node = int(f"{self.g.nbays + 1}{self.g.nst}")
             id_ctrl_dof = 1
-            spo = SPO(id_ctrl_node, id_ctrl_dof, self.base_cols)
+            spo = SPO(id_ctrl_node, id_ctrl_dof, self.base_cols, flag3d=self.flag3d)
             spo.load_pattern(control_nodes, load_pattern=spo_pattern, heights=self.g.heights, mode_shape=mode_shape)
             spo.set_analysis()
             outputs = spo.seek_solution()
@@ -599,7 +645,7 @@ class Model:
                 elements['Columns'].append(eleid)
                 if ele['Storey'] == 1:
                     base_cols.append(eleid)
-            s.hysteretic_hinges(ele, transfTag)
+            s.hysteretic_hinges(ele, transfTag, self.flag3d)
 
         return elements, base_cols
 
@@ -622,5 +668,8 @@ class Model:
         else:
             raise ValueError('[EXCEPTION] Wrong lumped hinge model (should be Hysteretic or Haselton)')
 
-        self.define_pdelta_columns(option='EqualDOF')
+        if not self.flag3d:
+            # Required only for 2D modelling
+            self.define_pdelta_columns(option='EqualDOF')
+
         self.define_masses()

@@ -58,7 +58,8 @@ class Geometry:
         defines nodes
         :return: DataFrame                      Node IDs and coordinates
         """
-        df = {'Node id': [], 'x': [], 'z': []}
+        # y coordinate used only for 3D modelling
+        df = {'Node id': [], 'x': [], 'y': [], 'z': []}
         for st in range(self.nst + 1):
             for bay in range(self.nbays + 1):
                 if self.hingeModel == 'haselton':
@@ -100,6 +101,8 @@ class Geometry:
                     df['Node id'].append(f"{bay + 1}{st}")
                     df['z'].append(self.heights[st])
                     df['x'].append(self.widths[bay])
+                    # TODO, 3D to be updated
+                    df['y'].append(0.0)
 
         df = pd.DataFrame.from_dict(df)
         return df

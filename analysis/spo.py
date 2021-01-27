@@ -6,7 +6,7 @@ import numpy as np
 
 
 class SPO:
-    def __init__(self, cntr_node, disp_dir, base_cols, dref=1.0, nstep=2000):
+    def __init__(self, cntr_node, disp_dir, base_cols, dref=1.0, nstep=2000, flag3d=False):
         """
         Initialize static pushover definition
         :param cntr_node: int                       Node to control with displacement integrator
@@ -15,6 +15,7 @@ class SPO:
         :param dref: float                          Reference displacement to which cycles are run. Corresponds to yield
                                                     or equivalent other, such as 1mm (in m)
         :param nstep: int                           Number of steps
+        :param flag3d: bool                         True for 3D modelling, False for 2D modelling
         """
         self.TOL = 1e-08
         self.ITERINIT = 50
@@ -23,8 +24,10 @@ class SPO:
         self.disp_dir = disp_dir
         self.nstep = nstep
         self.base_cols = base_cols
+        self.flag3d = flag3d
         self.TEST_TYPE = 'NormDispIncr'
         self.ALGORITHM_TYPE = 'KrylovNewton'
+        self.NEGLIGIBLE = 1e-09
 
     def load_pattern(self, nodes, load_pattern=2, heights=None, mode_shape=None):
         """
@@ -61,7 +64,11 @@ class SPO:
         op.timeSeries('Linear', 4)
         op.pattern('Plain', 400, 4)
         for fpush, nodepush in zip(loads, nodes):
-            op.load(nodepush, fpush, 0.0, 0.0)
+            if self.flag3d:
+                op.load(nodepush, fpush, self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE,
+                        self.NEGLIGIBLE)
+            else:
+                op.load(nodepush, fpush, self.NEGLIGIBLE, self.NEGLIGIBLE)
 
     def set_analysis(self):
         """

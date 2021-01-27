@@ -1,12 +1,13 @@
 """
 Master file to run OpenSees
+3D model may be used with hingeModel = Hysteretic only - haselton to be adapted
 It is recommended to run each analysis separately with the order being:
 1. Static analysis - ST
 2. Modal analysis - MA
 3. Static pushover analysis - PO
 4. Nonlinear time history analysis - TH (supports IDA only for now)
 """
-import openseespy.opensees as ops
+import openseespy.opensees as op
 from client.model import Model
 from pathlib import Path
 import numpy as np
@@ -19,7 +20,7 @@ from analysis.ida_htf import IDA_HTF
 class Master:
     def __init__(self, sections_file, loads_file, materials_file, outputsDir, gmdir=None, gmfileNames=None, IM_type=2,
                  max_runs=15, analysis_time_step=.01, drift_capacity=10., analysis_type=None, system="Perimeter",
-                 hingeModel="Hysteretic"):
+                 hingeModel="Hysteretic", flag3d=False):
         """
         Initializes master file
         :param sections_file: str                   Name of file containing section data in '*.csv' format
@@ -40,6 +41,7 @@ class Master:
                                                     ELF - equivalent lateral force method of analysis
         :param system: str                          System type (e.g. Perimeter or Space)
         :param hingeModel: str                      Hinge model (hysteretic or haselton)
+        :param flag3d: bool                         True for 3D modelling, False for 2D modelling
         """
         self.sections_file = sections_file
         self.loads_file = loads_file
@@ -54,6 +56,7 @@ class Master:
         self.analysis_type = analysis_type
         self.system = system
         self.hingeModel = hingeModel.lower()
+        self.flag3d = flag3d
         self.APPLY_GRAVITY_ELF = False
         self.FIRST_INT = .05
         self.INCR_STEP = .05
@@ -84,7 +87,7 @@ class Master:
         Perform a clean wipe
         :return: None
         """
-        ops.wipe()
+        op.wipe()
 
     def call_model(self, generate_model=True):
         """
@@ -93,7 +96,7 @@ class Master:
         :return: class                                      Object Model
         """
         m = Model(self.analysis_type, self.sections_file, self.loads_file, self.materials_file, self.outputsDir,
-                  self.system, hingeModel=self.hingeModel)
+                  self.system, hingeModel=self.hingeModel, flag3d=self.flag3d)
         # Generate the model if specified
         if generate_model:
             m.model()
@@ -150,7 +153,7 @@ class Master:
                           self.analysis_time_step, self.drift_capacity, self.NAME_X_FILE, self.NAME_Y_FILE,
                           self.DTS_FILE, self.DURS_FILE, self.gmdir, self.analysis_type, self.sections_file,
                           self.loads_file, self.materials_file, self.system, hingeModel=self.hingeModel,
-                          pflag=True)
+                          pflag=True, flag3d=self.flag3d)
 
             # Set-up
             ida.establish_im()
@@ -184,11 +187,11 @@ if __name__ == "__main__":
     start_time = timeit.default_timer()
 
     # Directories
-    directory = Path.cwd().parents[0] / ".applications/case1/Output"
-    materials_file = directory / "materials.csv"
+    directory = Path.cwd().parents[0] / ".applications/LOSS Validation Manuscript/Case2/Cache/frame1"
+    materials_file = directory.parents[1] / "materials.csv"
     section_file = directory / "hinge_models.csv"
-    loads_file = directory / "action.csv"
-    outputsDir = directory / "RCMRF/test"
+    loads_file = directory.parents[1] / "action.csv"
+    outputsDir = directory / "RCMRF"
     
     # GM directory
     gmdir = Path.cwd() / "sample/groundMotion"
@@ -197,10 +200,11 @@ if __name__ == "__main__":
     # RCMRF inputs
     hingeModel = "Hysteretic"
     analysis_type = ["TH"]
+    flag3d = False
 
     # Let's go...
     m = Master(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
-               analysis_type=analysis_type, system="Perimeter",  hingeModel=hingeModel)
+               analysis_type=analysis_type, system="Perimeter",  hingeModel=hingeModel, flag3d=flag3d)
 
     m.wipe()
     m.run_model()

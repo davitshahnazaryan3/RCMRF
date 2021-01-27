@@ -9,7 +9,7 @@ import numpy as np, warnings
 
 
 class SolutionAlgorithm:
-    def __init__(self, dt, tmax, dc, tnode, bnode, pflag=True):
+    def __init__(self, dt, tmax, dc, tnode, bnode, pflag=True, flag3d=False):
         """
         Procedure to execute the NRHA of a 2D model
         :param dt: float                            Analysis time step
@@ -18,6 +18,7 @@ class SolutionAlgorithm:
         :param tnode: list(int)                     List of top nodes
         :param bnode: list(int)                     List of bottom nodes
         :param pflag: bool                          Whether print information on screen or not
+        :param flag3d: bool                         True for 3D modelling, False for 2D modelling
         """
         self.dt = dt
         self.tmax = tmax
@@ -25,8 +26,9 @@ class SolutionAlgorithm:
         self.tnode = np.array(tnode)
         self.bnode = np.array(bnode)
         self.pflag = pflag
+        self.flag3d = flag3d
         self.TEST_TYPE = 'NormDispIncr'
-        self.TOL = 1e-07
+        self.TOL = 1e-04
         self.ITER = 50
         self.ALGORITHM_TYPE = 'KrylovNewton'
         self.c_index = 0
@@ -65,9 +67,13 @@ class SolutionAlgorithm:
         drifts = np.zeros((nst, 1))
         bdg_h = 0.0
         for i in range(1, nst + 1):
-            # Find the coordinates of the nodes in Global Y (2)
-            top2 = op.nodeCoord(int(self.tnode[i - 1]), 2)
-            bot2 = op.nodeCoord(int(self.bnode[i - 1]), 2)
+            # Find the coordinates of the nodes in Global Y (2 for 2D, 3 for 3D)
+            if self.flag3d:
+                top2 = op.nodeCoord(int(self.tnode[i - 1]), 3)
+                bot2 = op.nodeCoord(int(self.bnode[i - 1]), 3)
+            else:
+                top2 = op.nodeCoord(int(self.tnode[i - 1]), 2)
+                bot2 = op.nodeCoord(int(self.bnode[i - 1]), 2)
             dist = top2 - bot2
 
             bdg_h = bdg_h + dist
@@ -160,6 +166,7 @@ class SolutionAlgorithm:
                 self.c_index = -1
 
             # Recorders
+            # TODO, modify for 3D flag, add recorders for Y direction, as the third axis in the following recorders
             tempAccel = np.zeros((nst + 1, 1))
             tempDisp = np.zeros((nst + 1, 1))
             tempDrift = np.zeros((nst, 1))

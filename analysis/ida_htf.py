@@ -11,7 +11,7 @@ from client.model import Model
 class IDA_HTF:
     def __init__(self, first_int, incr_step, max_runs, IM_type, T_info, xi, omegas, dt, dcap, nmsfile_x, nmsfile_y,
                  dts_file, durs_file, gm_dir, analysis_type, sections_file, loads_file, materials, system='Perimeter',
-                 hingeModel='Haselton', pflag=True):
+                 hingeModel='Haselton', pflag=True, flag3d=False):
         """
         Initializes IDA
         :param first_int: float                     The first intensity to run the elastic run (e.g. 0.05g)
@@ -37,6 +37,7 @@ class IDA_HTF:
         :param gm_dir: str                          Directory containg the Ground Motions
         :param analysis_type, sections_file, loads_file, materials, system, hingeModel: See client\model.py
         :param pflag: bool                          Whether print information on screen or not
+        :param flag3d: bool                         True for 3D modelling, False for 2D modelling
         """
         self.first_int = first_int
         self.incr_step = incr_step
@@ -61,6 +62,7 @@ class IDA_HTF:
         self.hingeModel = hingeModel
         self.system = system
         self.pflag = pflag
+        self.flag3d = flag3d
         self.PTAGX = 10
         self.PTAGY = 20
         self.TSTAGX = 51
@@ -77,7 +79,7 @@ class IDA_HTF:
         :return: class                                      Object Model
         """
         m = Model(self.analysis_type, self.sections_file, self.loads_file, self.materials, None, self.system,
-                  self.hingeModel)
+                  self.hingeModel, flag3d=self.flag3d)
         if generate_model:
             # Create the nonlinear model
             m.model()
@@ -224,6 +226,7 @@ class IDA_HTF:
         a0 = 2 * w1 * w2 / (w2 ** 2 - w1 ** 2) * (w2 * self.xi - w1 * self.xi)
         a1 = 2 * w1 * w2 / (w2 ** 2 - w1 ** 2) * (-self.xi / w2 + self.xi / w1)
 
+        # TODO, for 3Dflag, time series for both directions
         # Rayleigh damping
         op.rayleigh(a0, 0.0, 0.0, a1)
         op.timeSeries('Path', self.TSTAGX, '-dt', dt, '-filePath', str(pathx), '-factor', fx)
@@ -249,7 +252,7 @@ class IDA_HTF:
         self.IM_output = np.zeros((nrecs, self.max_runs))
 
         # Loop for each record
-        for rec in range(nrecs):
+        for rec in range(1):
             # Counting starts from 0
             self.outputs[rec] = {}
             # Get the ground motion set information
@@ -318,7 +321,7 @@ class IDA_HTF:
                         print(f"[IDA] Record: {rec + 1}; Run: {j}; IM: {IM[j - 1]}")
 
                     # Commence analysis
-                    th = SolutionAlgorithm(self.dt, dur, self.dcap, m.g.tnode, m.g.bnode, self.pflag)
+                    th = SolutionAlgorithm(self.dt, dur, self.dcap, m.g.tnode, m.g.bnode, self.pflag, self.flag3d)
                     self.outputs[rec][j] = th.ntha_results
 
                     # Check the hunted run for collapse
@@ -380,7 +383,7 @@ class IDA_HTF:
                     if self.pflag:
                         print(f"[IDA] Record: {rec + 1}; Run: {j}; IM: {IMtr}")
 
-                    th = SolutionAlgorithm(self.dt, dur, self.dcap, m.g.tnode, m.g.bnode, self.pflag)
+                    th = SolutionAlgorithm(self.dt, dur, self.dcap, m.g.tnode, m.g.bnode, self.pflag, self.flag3d)
                     self.outputs[rec][j] = th.ntha_results
 
                     if th.c_index > 0:
@@ -434,7 +437,7 @@ class IDA_HTF:
                     if self.pflag:
                         print(f"[IDA] Record: {rec + 1}; Run: {j}; IM: {IMfil}")
 
-                    th = SolutionAlgorithm(self.dt, dur, self.dcap, m.g.tnode, m.g.bnode, self.pflag)
+                    th = SolutionAlgorithm(self.dt, dur, self.dcap, m.g.tnode, m.g.bnode, self.pflag, self.flag3d)
                     self.outputs[rec][j] = th.ntha_results
 
                     # Increment run number

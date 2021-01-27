@@ -23,9 +23,15 @@ B. Model file (Model)
 	13. Set recorders - set_recorders, client.Recorders
 
 
------- VARIATIONS WITH RESPECT TO IPBSD
-* Lumped hinge model - HingeRadau in IPBSD; Haselton in RCMRF
 
+------ Issues to address
+* Example record 29: for large IM a very small displacement is recorded. Find out why.
+
+
+Future updates
+
+- Space frames
+- Haselton spring models for a 3D model
 
 
 

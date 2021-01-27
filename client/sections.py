@@ -154,11 +154,12 @@ class Sections:
             except TypeError:
                 print('[EXCEPTION] Node ID not provided')
 
-    def hysteretic_hinges(self, ele, transfTag):
+    def hysteretic_hinges(self, ele, transfTag, flag3d):
         """
         Creates hysteretic hinges
         :param ele: DataFrame                       Hinge model parameters
         :param transfTag: int                       Element transformation tag
+        :param flag3d: bool                         True for 3D modelling, False for 2D modelling
         :return: None
         """
         # Bay and storey levels
@@ -204,7 +205,11 @@ class Sections:
                             -ele['phi3Neg'], pinchX, pinchY, damage1, damage2, beta)
 
         # Elastic section
-        op.section('Elastic', intTag, float(self.materials['Ec']) * 1000.0, area, iz)
+        if flag3d:
+            op.section('Elastic', intTag, float(self.materials['Ec']) * 1000.0, area, iz, iz,
+                       0.4 * float(self.materials['Ec']) * 1000.0, 0.01)
+        else:
+            op.section('Elastic', intTag, float(self.materials['Ec']) * 1000.0, area, iz)
         op.section('Uniaxial', phTag1, matTag1, 'Mz')
         op.section('Uniaxial', phTag2, matTag2, 'Mz')
         op.beamIntegration('HingeRadau', integrationTag, phTag1, ele['lp'], phTag2, ele['lp'], intTag)
