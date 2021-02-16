@@ -19,6 +19,7 @@ class Sections:
         """
         self.sections = sections
         self.materials = materials
+        self.UBIG = 1.0e10
 
     def rot_spring_2d_modIKmodel(self, eleID, nodeR, nodeC, K, asPos, asNeg, MyPos, MyNeg, LS, LK, LA, LD, cS, cK, cA,
                                  cD, th_pP, th_pN, th_pcP, th_pcN, ResP, ResN, th_uP, th_uN, DP, DN):
@@ -154,40 +155,47 @@ class Sections:
             except TypeError:
                 print('[EXCEPTION] Node ID not provided')
 
-    def hysteretic_hinges(self, ele, transfTag, flag3d):
+    def hysteretic_hinges(self, et, iNode, jNode, ele, transfTag, flag3d):
         """
         Creates hysteretic hinges
+        :param et: int                              Element tag
         :param ele: DataFrame                       Hinge model parameters
         :param transfTag: int                       Element transformation tag
         :param flag3d: bool                         True for 3D modelling, False for 2D modelling
         :return: None
         """
-        # Bay and storey levels
-        bay = ele['Bay']
-        st = ele['Storey']
         # Cross-section area of the element
         area = ele['b'] * ele['h']
         # Moment of inertia of the cross-section
         iz = ele['b'] * ele['h'] ** 3 / 12
+        # Secondary moment of inertia
+        iy = ele['h'] * ele['b'] ** 3 / 12
+        # Shear parameters
+        nu = 0.2
+        Gc = float(self.materials['Ec']) * 1000.0 / 2.0 / (1 + nu)
+
         # Node IDs connecting the elements
-        if ele['Element'].lower() == 'beam':
-            eleTag = f"1{bay}{st}"
-            iNode = int(f"{bay}{st}")
-            jNode = int(f"{bay + 1}{st}")
-        else:
-            eleTag = f"2{bay}{st}"
-            iNode = int(f"{bay}{st - 1}")
-            jNode = int(f"{bay}{st}")
+        if not flag3d:
+            # Bay and storey levels
+            bay = ele['Bay']
+            st = ele['Storey']
+
+            if ele['Element'].lower() == 'beam':
+                iNode = int(f"{bay}{st}")
+                jNode = int(f"{bay + 1}{st}")
+            else:
+                iNode = int(f"{bay}{st - 1}")
+                jNode = int(f"{bay}{st}")
 
         # Material tags
-        matTag1 = int('101' + eleTag)
-        matTag2 = int('102' + eleTag)
-        intTag = int('105' + eleTag)
-        phTag1 = int('106' + eleTag)
-        phTag2 = int('107' + eleTag)
+        matTag1 = int(f'101{et}')
+        matTag2 = int(f'102{et}')
+        intTag = int(f'105{et}')
+        phTag1 = int(f'106{et}')
+        phTag2 = int(f'107{et}')
 
         # Integration tag
-        integrationTag = int('108' + eleTag)
+        integrationTag = int(f'108{et}')
 
         # Some additional parameters for the hysteretic model
         pinchX = 0.8
@@ -206,11 +214,10 @@ class Sections:
 
         # Elastic section
         if flag3d:
-            op.section('Elastic', intTag, float(self.materials['Ec']) * 1000.0, area, iz, iz,
-                       0.4 * float(self.materials['Ec']) * 1000.0, 0.01)
+            op.section('Elastic', intTag, float(self.materials['Ec']) * 1000.0, area, iy, iz, Gc, self.UBIG)
         else:
             op.section('Elastic', intTag, float(self.materials['Ec']) * 1000.0, area, iz)
         op.section('Uniaxial', phTag1, matTag1, 'Mz')
         op.section('Uniaxial', phTag2, matTag2, 'Mz')
         op.beamIntegration('HingeRadau', integrationTag, phTag1, ele['lp'], phTag2, ele['lp'], intTag)
-        op.element('forceBeamColumn', int(eleTag), iNode, jNode, transfTag, integrationTag)
+        op.element('forceBeamColumn', int(et), iNode, jNode, transfTag, integrationTag)

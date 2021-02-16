@@ -8,7 +8,7 @@ from analysis.static import Static
 from client.model import Model
 
 
-class IDA_HTF:
+class IDA_HTF_3D:
     def __init__(self, first_int, incr_step, max_runs, IM_type, T_info, xi, omegas, dt, dcap, nmsfile_x, nmsfile_y,
                  dts_file, durs_file, gm_dir, analysis_type, sections_file, loads_file, materials, system='Perimeter',
                  hingeModel='Haselton', pflag=True, flag3d=False):
@@ -105,12 +105,12 @@ class IDA_HTF:
         f.close()
         return data
 
-    def get_IM(self, eq, dt, T, xi):
+    def get_IM(self, eq, dt, period, xi):
         """
         Gets Sa(T) of a given record, for a specified value of period T using the Newmark Average Acceleration
         :param eq: str                              Filename which is a single column file in units of g (e.g. "Eq.txt")
         :param dt: float                            Time step in seconds (e.g. 0.01)
-        :param T: float                             Period in seconds (e.g. 1.0)
+        :param period: float                        Period in seconds (e.g. 1.0)
         :param xi: float                            Elastic damping (e.g. 0.05)
         :return: floats                             sa - pseudo-spectral acceleration in g
                                                     sv - pseudo-spectral velocity in m/s
@@ -120,7 +120,7 @@ class IDA_HTF:
         # Read the acceleration time series
         accg = self.read_text_file(eq, 0)
 
-        if T == 0.0:
+        if period == 0.0:
             pga = 0.0
             for i in range(len(accg)):
                 temp2 = abs(accg[i])
@@ -146,7 +146,7 @@ class IDA_HTF:
 
             # Calculate the initial values
             # Stiffness in N/m
-            k = ms * np.power(6.2832 / T, 2)
+            k = ms * np.power(6.2832 / period, 2)
             # Circular frequency
             w = np.power(k / ms, 0.5)
             # Damping coefficient
@@ -226,17 +226,21 @@ class IDA_HTF:
         a0 = 2 * w1 * w2 / (w2 ** 2 - w1 ** 2) * (w2 * self.xi - w1 * self.xi)
         a1 = 2 * w1 * w2 / (w2 ** 2 - w1 ** 2) * (-self.xi / w2 + self.xi / w1)
 
-        # TODO, for 3Dflag, time series for both directions
         # Rayleigh damping
         op.rayleigh(a0, 0.0, 0.0, a1)
         op.timeSeries('Path', self.TSTAGX, '-dt', dt, '-filePath', str(pathx), '-factor', fx)
-        # op.timeSeries('Path', self.TSTAGY, '-dt', dt, '-filePath', str(pathy), '-factor', fy)
+        op.timeSeries('Path', self.TSTAGY, '-dt', dt, '-filePath', str(pathy), '-factor', fy)
         op.pattern('UniformExcitation', self.PTAGX, 1, '-accel', self.TSTAGX)
+        if self.flag3d:
+            op.pattern('UniformExcitation', self.PTAGY, 2, '-accel', self.TSTAGY)
 
         # Delete the old analysis and all it's component objects
         op.wipeAnalysis()
-        op.constraints('Plain')
-        op.numberer('Plain')
+        if self.flag3d:
+            op.constraints('Penalty', 1.0e15, 1.0e15)
+        else:
+            op.constraints('Plain')
+        op.numberer('RCM')
         op.system('UmfPack')
 
     def establish_im(self):
@@ -252,7 +256,7 @@ class IDA_HTF:
         self.IM_output = np.zeros((nrecs, self.max_runs))
 
         # Loop for each record
-        for rec in range(1):
+        for rec in range(nrecs):
             # Counting starts from 0
             self.outputs[rec] = {}
             # Get the ground motion set information
@@ -297,7 +301,7 @@ class IDA_HTF:
             while j <= self.max_runs:
                 # As long as hunting flag is 1, meaning that collapse have not been reached
                 if hflag == 1:
-                    print("[STEP] We join the hunt...")
+                    print("[STEP] Gehrman joins the hunt...")
                     # Determine the intensity to run at during the hunting
                     if j == 1:
                         # First IM
@@ -326,7 +330,7 @@ class IDA_HTF:
 
                     # Check the hunted run for collapse
                     """
-                    c_index = -1                Analysis failed to converge at controltime of Tmax
+                    c_index = -1                Analysis failed to converge at control time of Tmax
                     c_index = 0                 Analysis completed successfully
                     c_index = 1                 Local structure collapse
                     """
@@ -357,17 +361,17 @@ class IDA_HTF:
                         # Remove that value of IM from the array
                         IM[j - 1] = 0.0
 
-                    # Determine the difference between the hunting's noncollapse and collapse IM
+                    # Determine the difference between the hunting's non-collapse and collapse IM
                     diff = firstC - IM[j - 2]
 
-                    # Take 0.2 of the difference
+                    # Take 20% of the difference
                     inctr = 0.2 * diff
 
                     # Place a lower threshold on the increment so it doesnt start tracing too fine
                     if inctr < 0.05:
                         inctr = 0.025
 
-                    # Calculate new tracing IM, which is previous noncollapse plus increment
+                    # Calculate new tracing IM, which is previous non-collapse plus increment
                     IMtr = IM[j - 2] + inctr
 
                     IM[j - 1] = IMtr
@@ -411,6 +415,7 @@ class IDA_HTF:
                     # Determine the biggest gap in IM for the hunted runs
                     gap = 0.0
                     IMfil = 0.0
+
                     '''We go to the end of the list minus 1 because, if not we would be filling between a noncollapsing
                     and a collapsing run, for which we are not sure if that filling run would be a non collapse -
                     In short, does away with collapsing fills'''

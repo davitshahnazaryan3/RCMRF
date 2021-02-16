@@ -9,9 +9,10 @@ class Static:
         self.NSTEP = 10
         self.TOL = 1e-08
 
-    def static_analysis(self):
+    def static_analysis(self, flag3d=False):
         """
         Starts static analysis
+        :param flag3d: bool
         :return: None
         """
         # Load increment
@@ -23,7 +24,10 @@ class Static:
         # How to store and solve the system of equations in the analysis (large model: try UmfPack)
         op.system('UmfPack')
         # Handling of boundary conditions
-        op.constraints('Transformation')
+        if flag3d:
+            op.constraints('Penalty', 1.0e15, 1.0e15)
+        else:
+            op.constraints('Transformation')
         # Determine if convergence has been achieved at the end of an iteration step
         op.test('EnergyIncr', self.TOL, 10)
         # Use Newton's solution algorithm: updates tangent stiffness at every iteration

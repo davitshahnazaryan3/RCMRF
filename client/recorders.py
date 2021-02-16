@@ -6,18 +6,18 @@ import openseespy.opensees as op
 
 
 class Recorders:
-    def __init__(self, nbays, nst, elements, hingeModel='haselton'):
+    def __init__(self, geometry, elements, hingeModel='haselton', flag3d=False):
         """
         Initializing recorder generation
-        :param nbays: int                           Number of bays
-        :param nst: int                             Number of stories
+        :param geometry: Object                     Geometry object
         :param elements: dict(list(int))            Element IDs
         :param hingeModel: str                      Hinge Model
+        :param flag3d: bool
         """
-        self.nbays = nbays
-        self.nst = nst
+        self.geometry = geometry
         self.elements = elements
         self.hingeModel = hingeModel
+        self.flag3d = flag3d
 
     def st_recorder(self, base_nodes):
         """
@@ -25,7 +25,7 @@ class Recorders:
         :param base_nodes: list(int)                Base node IDs
         :return: dict                               Dictionary including all recorders of interest
         """
-        results = {}
+        results = {"Nodes": {}}
         op.reactions()
         # Node recorders
         for n in range(len(base_nodes)):
@@ -33,14 +33,19 @@ class Recorders:
                 node = int(f"{base_nodes[n]}0")
             else:
                 node = base_nodes[n]
-            results[node] = op.nodeReaction(node)
+            results["Nodes"][node] = op.nodeReaction(node)
 
         # Element recordders
         results['Element'] = {}
         results['Element']['Beam'] = {}
         results['Element']['Column'] = {}
-        for beam in self.elements['Beams']:
-            results['Element']['Beam'][beam] = op.eleForce(int(beam))
+        if self.flag3d:
+            for d in self.elements['Beams']:
+                for beam in self.elements['Beams'][d]:
+                    results["Element"]["Beam"][beam] = op.eleForce(beam)
+        else:
+            for beam in self.elements['Beams']:
+                results['Element']['Beam'][beam] = op.eleForce(int(beam))
 
         if self.hingeModel == 'haselton':
             for cols in self.elements['Columns internal']:
@@ -52,8 +57,13 @@ class Recorders:
                     results['Element']['Column'][ele] = op.eleForce(ele)
 
         else:
-            for col in self.elements['Columns']:
-                results['Element']['Column'][col] = op.eleForce(int(col))
+            if self.flag3d:
+                for d in self.elements["Columns"]:
+                    for col in self.elements["Columns"][d]:
+                        results["Element"]["Column"][col] = op.eleForce(col)
+            else:
+                for col in self.elements['Columns']:
+                    results['Element']['Column'][col] = op.eleForce(int(col))
 
         return results
 
@@ -63,13 +73,21 @@ class Recorders:
         :param num_modes: int                       Number of modal shapes to record
         :return: dict                               Dictionary containing modal shape information
         """
-        results = {}
-        for k in range(min(num_modes, 3)):
-            results[f"Mode{k + 1}"] = []
-            for st in range(self.nst):
-                if self.hingeModel == 'haselton':
-                    results[f"Mode{k + 1}"].append(op.nodeEigenvector(int(f"{st + 2}{self.nbays + 1}1"), k + 1, 1))
-                else:
-                    results[f"Mode{k + 1}"].append(op.nodeEigenvector(int(f"{self.nbays + 1}{st + 1}"), k + 1, 1))
-
+        if self.flag3d:
+            results = {"Mode1": [], "Mode2": []}
+            for st in range(self.geometry.nst):
+                nodetag = int(f"{self.geometry.nbays[0] + 1}{self.geometry.nbays[1] + 1}{st + 1}")
+                results["Mode1"].append(op.nodeEigenvector(nodetag, 1, 1))
+                results["Mode2"].append(op.nodeEigenvector(nodetag, 2, 2))
+        else:
+            results = {}
+            for k in range(min(num_modes, 3)):
+                results[f"Mode{k + 1}"] = []
+                for st in range(self.geometry.nst):
+                    if self.hingeModel == 'haselton':
+                        results[f"Mode{k + 1}"].append(op.nodeEigenvector(int(f"{st + 2}{self.geometry.nbays + 1}1"),
+                                                                          k + 1, 1))
+                    else:
+                        results[f"Mode{k + 1}"].append(op.nodeEigenvector(int(f"{self.geometry.nbays + 1}{st + 1}"),
+                                                                          k + 1, 1))
         return results

@@ -6,22 +6,24 @@ import numpy as np
 
 
 class Modal:
-    def __init__(self, num_modes, damp_modes=None, damping=0.05):
+    def __init__(self, num_modes, damp_modes=None, damping=0.05, direction=0):
         """
         Initializes modal analysis
         :param num_modes: int                   Number of modes of interest
         :param damp_modes: list(int)            2 element List of damping modes (e.g. [1, 3])
         :param damping: float                   Ratio of critical damping to be applied to the listed modes
+        :param direction: int
         """
         self.num_modes = num_modes
         self.damp_modes = damp_modes
         self.damping = damping
-        lam = self.get_lambda()
+        self.direction = direction
+        lam = self.compute_eigenvectors()
         self.record_stuff()
         self.omega, self.freq, self.period = self.extract_eigenvalues(lam)
         self.xi_modes = self.get_damping(self.omega)
 
-    def get_lambda(self):
+    def compute_eigenvectors(self):
         """
         Computes eigen values
         :return: float                          Eigenvalue
@@ -44,8 +46,7 @@ class Modal:
                     except:
                         print('[EXCEPTION] Eigensolver failed.')
 
-        else:
-            return lam
+        return lam
 
     @staticmethod
     def record_stuff():
