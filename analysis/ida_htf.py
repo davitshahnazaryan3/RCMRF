@@ -1,5 +1,6 @@
 """
 Incremental Dynamic Analysis using Hunt, Trace and Fill algorithm
+Object temporarily kept. Will be deleted later...
 """
 import openseespy.opensees as op
 import numpy as np, pandas as pd

@@ -149,11 +149,11 @@ class SolutionAlgorithm:
         for i in range(1, nst + 1):
             # Find the coordinates of the nodes in Global Y (2 for 2D, 3 for 3D)
             if self.flag3d:
-                top2 = op.nodeCoord(int(self.tnode[i - 1]), 3)
-                bot2 = op.nodeCoord(int(self.bnode[i - 1]), 3)
+                top2 = op.nodeCoord(int(self.tnode[0, i - 1]), 3)
+                bot2 = op.nodeCoord(int(self.bnode[0, i - 1]), 3)
             else:
-                top2 = op.nodeCoord(int(self.tnode[i - 1]), 2)
-                bot2 = op.nodeCoord(int(self.bnode[i - 1]), 2)
+                top2 = op.nodeCoord(int(self.tnode[0, i - 1]), 2)
+                bot2 = op.nodeCoord(int(self.bnode[0, i - 1]), 2)
             dist = top2 - bot2
 
             bdg_h = bdg_h + dist
@@ -179,7 +179,7 @@ class SolutionAlgorithm:
 
             # Recording EDPs at each storey level to return
             # For each direction
-            for j in tempAccel.shape[0]:
+            for j in range(tempAccel.shape[0]):
                 # At each storey level
                 for i in range(nst + 1):
                     if i == nst:
@@ -187,13 +187,13 @@ class SolutionAlgorithm:
                         #  for accelerations
                         # Index 0 indicates along X direction, and 1 indicates along Y direction
                         # Nodal accelerations in g
-                        tempAccel[j, i, 0] = op.nodeAccel(int(self.tnode[i - 1]), j + 1) / 9.81
+                        tempAccel[j, i, 0] = op.nodeAccel(int(self.tnode[0, i - 1]), j + 1) / 9.81
                         # Nodal displacements in m
-                        tempDisp[j, i, 0] = op.nodeDisp(int(self.tnode[i - 1]), j + 1)
+                        tempDisp[j, i, 0] = op.nodeDisp(int(self.tnode[0, i - 1]), j + 1)
                     else:
                         # Get the PGA values (nodeAccel returns relative, not absolute values, so it will be 0)
-                        tempAccel[j, i, 0] = op.nodeAccel(int(self.bnode[i]), j + 1) / 9.81
-                        tempDisp[j, i, 0] = op.nodeDisp(int(self.bnode[i]), j + 1)
+                        tempAccel[j, i, 0] = op.nodeAccel(int(self.bnode[0, i]), j + 1) / 9.81
+                        tempDisp[j, i, 0] = op.nodeDisp(int(self.bnode[0, i]), j + 1)
                     if i > 0:
                         # Storey height
                         cht = h[i - 1]
@@ -213,11 +213,11 @@ class SolutionAlgorithm:
             # Check storey drifts and accelerations
             for i in range(1, nst+1):
                 # Top node displacement
-                tnode_disp_x = op.nodeDisp(int(self.tnode[i - 1]), 1)
-                tnode_disp_y = op.nodeDisp(int(self.tnode[i - 1]), 2)
+                tnode_disp_x = op.nodeDisp(int(self.tnode[0, i - 1]), 1)
+                tnode_disp_y = op.nodeDisp(int(self.tnode[0, i - 1]), 2)
                 # Bottom node displacement
-                bnode_disp_x = op.nodeDisp(int(self.bnode[i - 1]), 1)
-                bnode_disp_y = op.nodeDisp(int(self.bnode[i - 1]), 2)
+                bnode_disp_x = op.nodeDisp(int(self.bnode[0, i - 1]), 1)
+                bnode_disp_y = op.nodeDisp(int(self.bnode[0, i - 1]), 2)
                 # Storey height
                 cht = h[i - 1]
                 # Storey drift in %

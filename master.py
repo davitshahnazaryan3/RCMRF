@@ -21,7 +21,7 @@ import numpy as np
 import os
 import json
 import pickle
-from analysis.ida_htf import IDA_HTF
+from analysis.ida_htf_3d import IDA_HTF_3D
 
 
 class Master:
@@ -173,7 +173,7 @@ class Master:
                 raise ValueError("[EXCEPTION] Modal analysis data do not exist.")
 
             # Initialize
-            ida = IDA_HTF(self.FIRST_INT, self.INCR_STEP, self.max_runs, self.IM_type, period, damping, omegas,
+            ida = IDA_HTF_3D(self.FIRST_INT, self.INCR_STEP, self.max_runs, self.IM_type, period, damping, omegas,
                           self.analysis_time_step, self.drift_capacity, self.NAME_X_FILE, self.NAME_Y_FILE,
                           self.DTS_FILE, self.DURS_FILE, self.gmdir, self.analysis_type, self.sections_file,
                           self.loads_file, self.materials_file, self.system, hingeModel=self.hinge_model,
@@ -236,7 +236,7 @@ if __name__ == "__main__":
 
     # RCMRF inputs
     hingeModel = "Hysteretic"
-    analysis_type = ["PO"]
+    analysis_type = ["TH"]
     flag3d = True
     direction = 0
 
