@@ -27,7 +27,7 @@ class SolutionAlgorithm:
         self.bnode = np.array(bnode)
         self.pflag = pflag
         self.flag3d = flag3d
-        if self.flag3d:
+        if not self.flag3d:
             self.TEST_TYPE = 'NormDispIncr'
             self.TOL = 1e-04
         else:
@@ -137,7 +137,10 @@ class SolutionAlgorithm:
 
         # Set up the storey drift and acceleration values
         h = np.array([])
-        nst = len(self.tnode)
+        if self.flag3d:
+            nst = self.tnode.shape[1]
+        else:
+            nst = len(self.tnode)
         maccel = np.zeros((d, nst + 1))
         mdrift = np.zeros((d, nst))
 

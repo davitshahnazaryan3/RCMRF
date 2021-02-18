@@ -2,7 +2,9 @@
 Incremental Dynamic Analysis using Hunt, Trace and Fill algorithm
 """
 import openseespy.opensees as op
-import numpy as np, pandas as pd
+import numpy as np
+import pandas as pd
+import pickle
 from analysis.solutionAlgorithm import SolutionAlgorithm
 from analysis.static import Static
 from client.model import Model
@@ -11,7 +13,7 @@ from client.model import Model
 class IDA_HTF_3D:
     def __init__(self, first_int, incr_step, max_runs, IM_type, T_info, xi, omegas, dt, dcap, nmsfile_x, nmsfile_y,
                  dts_file, durs_file, gm_dir, analysis_type, sections_file, loads_file, materials, system='Perimeter',
-                 hingeModel='Haselton', pflag=True, flag3d=False):
+                 hingeModel='Haselton', pflag=True, flag3d=False, export_at_each_step=False):
         """
         Initializes IDA
         :param first_int: float                     The first intensity to run the elastic run (e.g. 0.05g)
@@ -38,6 +40,7 @@ class IDA_HTF_3D:
         :param analysis_type, sections_file, loads_file, materials, system, hingeModel: See client\model.py
         :param pflag: bool                          Whether print information on screen or not
         :param flag3d: bool                         True for 3D modelling, False for 2D modelling
+        :param export_at_each_step: bool            Export at each step, i.e. record-run
         """
         self.first_int = first_int
         self.incr_step = incr_step
@@ -63,6 +66,7 @@ class IDA_HTF_3D:
         self.system = system
         self.pflag = pflag
         self.flag3d = flag3d
+        self.export_at_each_step = export_at_each_step
         self.PTAGX = 10
         self.PTAGY = 20
         self.TSTAGX = 51
@@ -243,9 +247,10 @@ class IDA_HTF_3D:
         op.numberer('RCM')
         op.system('UmfPack')
 
-    def establish_im(self):
+    def establish_im(self, output_dir=None):
         """
         Establishes IM and performs analyses
+        :param output_dir: str              Outputs directory
         :return: None
         """
         # Get the ground motion set information
@@ -277,10 +282,14 @@ class IDA_HTF_3D:
 
             elif self.IM_type == 2:
                 print('[IDA] IM is Sa at a specified period')
-                Tcond = self.T_info
-                sd, sv, sa = self.get_IM(eq_name_x, dts_list[rec], Tcond, self.xi)
+                if self.flag3d:
+                    Tcond_x = self.T_info[0]
+                    Tcond_y = self.T_info[1]
+                else:
+                    Tcond_x = Tcond_y = self.T_info
+                sd, sv, sa = self.get_IM(eq_name_x, dts_list[rec], Tcond_x, self.xi)
                 IMx = sa
-                sd, sv, sa = self.get_IM(eq_name_y, dts_list[rec], Tcond, self.xi)
+                sd, sv, sa = self.get_IM(eq_name_y, dts_list[rec], Tcond_y, self.xi)
                 IMy = sa
                 # Get the geometric mean
                 IM_geomean = np.power(IMx * IMy, 0.5)
@@ -448,6 +457,11 @@ class IDA_HTF_3D:
                     # Increment run number
                     j += 1
                     op.wipe()
+
+                # Export results at each run
+                if self.export_at_each_step:
+                    with open(output_dir / f"Record{rec + 1}_Run{j - 1}.pickle", "wb") as handle:
+                        pickle.dump(self.outputs[rec][j-1], handle)
 
                 # Wrap it up and finish
                 if j == self.max_runs and hflag == 1:

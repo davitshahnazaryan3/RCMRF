@@ -27,7 +27,8 @@ from analysis.ida_htf_3d import IDA_HTF_3D
 class Master:
     def __init__(self, sections_file, loads_file, materials_file, outputsDir, gmdir=None, gmfileNames=None, IM_type=2,
                  max_runs=15, analysis_time_step=.01, drift_capacity=10., analysis_type=None, system="Perimeter",
-                 hinge_model="Hysteretic", flag3d=False, direction=0):
+                 hinge_model="Hysteretic", flag3d=False, direction=0, export_at_each_step=False,
+                 period_assignment=None):
         """
         Initializes master file
         :param sections_file: str                   Name of file containing section data in '*.csv' format
@@ -50,6 +51,8 @@ class Master:
         :param hinge_model: str                     Hinge model (hysteretic or haselton)
         :param flag3d: bool                         True for 3D modelling, False for 2D modelling
         :param direction: int                       Direction of analysis
+        :param export_at_each_step: bool            Exporting at each step, i.e. record-run
+        :param period_assignment: dict              Period assigment IDs (for 3D only)
         """
         # list of strings for 3D modelling, and string for 2D modelling
         self.sections_file = sections_file
@@ -68,7 +71,9 @@ class Master:
         self.system = system
         self.hinge_model = hinge_model.lower()
         self.flag3d = flag3d
+        self.export_at_each_step = export_at_each_step
         self.direction = direction
+        self.period_assignment = period_assignment
         self.APPLY_GRAVITY_ELF = False
         self.FIRST_INT = .05
         self.INCR_STEP = .05
@@ -83,7 +88,8 @@ class Master:
         # Create an outputs directory if none exists
         self.createFolder(outputsDir)
 
-    def createFolder(self, directory):
+    @staticmethod
+    def createFolder(directory):
         """
         Checks whether provided directory exists, if no creates one
         :param directory: str
@@ -160,12 +166,19 @@ class Master:
             m.perform_analysis()
 
         elif "TH" in self.analysis_type or "timehistory" in self.analysis_type or "IDA" in self.analysis_type:
+            # Create a folder for NLTHA
+            self.createFolder(self.outputsDir / "NLTHA")
+
             # Nonlinear time history analysis
             print("[INITIATE] IDA started")
             try:
                 with open(self.outputsDir / "MA.json") as f:
                     results = json.load(f)
-                    period = results["Periods"][0]
+                    if self.flag3d:
+                        period = [results["Periods"][self.period_assignment["x"]],
+                                  results["Periods"][self.period_assignment["y"]]]
+                    else:
+                        period = results["Periods"][0]
                     damping = results["Damping"][0]
                     omegas = results["CircFreq"]
 
@@ -174,17 +187,18 @@ class Master:
 
             # Initialize
             ida = IDA_HTF_3D(self.FIRST_INT, self.INCR_STEP, self.max_runs, self.IM_type, period, damping, omegas,
-                          self.analysis_time_step, self.drift_capacity, self.NAME_X_FILE, self.NAME_Y_FILE,
-                          self.DTS_FILE, self.DURS_FILE, self.gmdir, self.analysis_type, self.sections_file,
-                          self.loads_file, self.materials_file, self.system, hingeModel=self.hinge_model,
-                          pflag=True, flag3d=self.flag3d)
+                             self.analysis_time_step, self.drift_capacity, self.NAME_X_FILE, self.NAME_Y_FILE,
+                             self.DTS_FILE, self.DURS_FILE, self.gmdir, self.analysis_type, self.sections_file,
+                             self.loads_file, self.materials_file, self.system, hingeModel=self.hinge_model,
+                             pflag=True, flag3d=self.flag3d, export_at_each_step=self.export_at_each_step)
 
             # Set-up
-            ida.establish_im()
+            ida.establish_im(output_dir=self.outputsDir / "NLTHA")
 
             # Export results
-            with open(self.outputsDir / "IDA.pickle", "wb") as handle:
-                pickle.dump(ida.outputs, handle)
+            if not self.export_at_each_step:
+                with open(self.outputsDir / "IDA.pickle", "wb") as handle:
+                    pickle.dump(ida.outputs, handle)
             np.savetxt(self.outputsDir / "IM.csv", ida.IM_output, delimiter=',')
 
             print("[SUCCESS] IDA done")
@@ -238,12 +252,14 @@ if __name__ == "__main__":
     hingeModel = "Hysteretic"
     analysis_type = ["TH"]
     flag3d = True
+    export_at_each_step = True
     direction = 0
+    period_assignment = {"x": 0, "y": 1}
 
     # Let's go...
     m = Master(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
                analysis_type=analysis_type, system="Perimeter", hinge_model=hingeModel, flag3d=flag3d,
-               direction=direction)
+               direction=direction, export_at_each_step=export_at_each_step, period_assignment=period_assignment)
 
     m.wipe()
     m.run_model()
