@@ -55,7 +55,7 @@ class SPO:
             print('[STEP] Applying triangular load pattern...')
             for h in range(len(heights)):
                 if heights[h] != 0.0:
-                    loads.append(heights[h] / sum(heights[:h]))
+                    loads.append(heights[h] / heights[-1])
 
         elif load_pattern == 2:
             print('[STEP] Applying 1st mode proportional load pattern...')

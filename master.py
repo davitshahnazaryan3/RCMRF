@@ -88,6 +88,9 @@ class Master:
         # Create an outputs directory if none exists
         self.createFolder(outputsDir)
 
+        if direction != 0 and flag3d and analysis_type == "MA":
+            print("[WARNING] Direction should be set to 0 for Modal Analysis!")
+
     @staticmethod
     def createFolder(directory):
         """
@@ -143,9 +146,12 @@ class Master:
                     modal_analysis_outputs = json.load(f)
                 # Modal shape as the SPO lateral load pattern shape
                 if self.direction == 0:
-                    mode_shape = modal_analysis_outputs["Mode1"]
+                    mode_shape = np.abs(modal_analysis_outputs["Mode1"])
                 else:
-                    mode_shape = modal_analysis_outputs["Mode2"]
+                    mode_shape = np.abs(modal_analysis_outputs["Mode2"])
+                # Normalize, helps to avoid convergence issues
+                mode_shape = mode_shape / max(mode_shape)
+                mode_shape = np.round(mode_shape, 2)
                 # Call and run the OpenSees model
                 m = self.call_model()
                 m.perform_analysis(spo_pattern=2, mode_shape=mode_shape)
@@ -175,6 +181,7 @@ class Master:
                 with open(self.outputsDir / "MA.json") as f:
                     results = json.load(f)
                     if self.flag3d:
+
                         period = [results["Periods"][self.period_assignment["x"]],
                                   results["Periods"][self.period_assignment["y"]]]
                     else:
@@ -192,14 +199,18 @@ class Master:
                              self.loads_file, self.materials_file, self.system, hingeModel=self.hinge_model,
                              pflag=True, flag3d=self.flag3d, export_at_each_step=self.export_at_each_step)
 
-            # Set-up
+            # The Set-up
             ida.establish_im(output_dir=self.outputsDir / "NLTHA")
 
             # Export results
-            if not self.export_at_each_step:
+            if self.export_at_each_step:
                 with open(self.outputsDir / "IDA.pickle", "wb") as handle:
                     pickle.dump(ida.outputs, handle)
-            np.savetxt(self.outputsDir / "IM.csv", ida.IM_output, delimiter=',')
+            if os.path.exists(self.outputsDir / "IM.csv"):
+                im_filename = "IM_temp.csv"
+            else:
+                im_filename = "IM.csv"
+            np.savetxt(self.outputsDir / im_filename, ida.IM_output, delimiter=',')
 
             print("[SUCCESS] IDA done")
 
@@ -225,7 +236,7 @@ if __name__ == "__main__":
     start_time = timeit.default_timer()
 
     # Directories
-    directory_x = Path.cwd().parents[0] / ".applications/LOSS Validation Manuscript/Case2/Cache/framex"
+    directory_x = Path.cwd().parents[0] / ".applications/LOSS Validation Manuscript/Case21/Cache/framex"
     materials_file = directory_x.parents[1] / "materials.csv"
     loads_file = directory_x.parents[1] / "action.csv"
     outputsDir = directory_x.parents[1] / "RCMRF"
@@ -234,11 +245,11 @@ if __name__ == "__main__":
     section_file_x = directory_x / "hinge_models.csv"
 
     # Y direction
-    directory_y = Path.cwd().parents[0] / ".applications/LOSS Validation Manuscript/Case2/Cache/framey"
+    directory_y = Path.cwd().parents[0] / ".applications/LOSS Validation Manuscript/Case21/Cache/framey"
     section_file_y = directory_y / "hinge_models.csv"
 
     # Gravity elements
-    directory_gr = Path.cwd().parents[0] / ".applications/LOSS Validation Manuscript/Case2/Cache"
+    directory_gr = Path.cwd().parents[0] / ".applications/LOSS Validation Manuscript/Case21/Cache"
     section_file_gr = directory_gr / "gravity_hinges.csv"
 
     # Directories
@@ -251,9 +262,10 @@ if __name__ == "__main__":
     # RCMRF inputs
     hingeModel = "Hysteretic"
     analysis_type = ["TH"]
+    # Run MA with direction = 0 always
+    direction = 0
     flag3d = True
     export_at_each_step = True
-    direction = 0
     period_assignment = {"x": 0, "y": 1}
 
     # Let's go...

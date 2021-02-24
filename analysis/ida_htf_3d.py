@@ -337,6 +337,11 @@ class IDA_HTF_3D:
                     th = SolutionAlgorithm(self.dt, dur, self.dcap, m.g.tnode, m.g.bnode, self.pflag, self.flag3d)
                     self.outputs[rec][j] = th.ntha_results
 
+                    # Export results at each run
+                    if self.export_at_each_step:
+                        with open(output_dir / f"Record{rec + 1}_Run{j}.pickle", "wb") as handle:
+                            pickle.dump(self.outputs[rec][j], handle)
+
                     # Check the hunted run for collapse
                     """
                     c_index = -1                Analysis failed to converge at control time of Tmax
@@ -399,6 +404,11 @@ class IDA_HTF_3D:
                     th = SolutionAlgorithm(self.dt, dur, self.dcap, m.g.tnode, m.g.bnode, self.pflag, self.flag3d)
                     self.outputs[rec][j] = th.ntha_results
 
+                    # Export results at each run
+                    if self.export_at_each_step:
+                        with open(output_dir / f"Record{rec + 1}_Run{j}.pickle", "wb") as handle:
+                            pickle.dump(self.outputs[rec][j], handle)
+
                     if th.c_index > 0:
                         # Stop tracing
                         tflag = 0
@@ -454,14 +464,14 @@ class IDA_HTF_3D:
                     th = SolutionAlgorithm(self.dt, dur, self.dcap, m.g.tnode, m.g.bnode, self.pflag, self.flag3d)
                     self.outputs[rec][j] = th.ntha_results
 
+                    # Export results at each run
+                    if self.export_at_each_step:
+                        with open(output_dir / f"Record{rec + 1}_Run{j}.pickle", "wb") as handle:
+                            pickle.dump(self.outputs[rec][j], handle)
+
                     # Increment run number
                     j += 1
                     op.wipe()
-
-                # Export results at each run
-                if self.export_at_each_step:
-                    with open(output_dir / f"Record{rec + 1}_Run{j - 1}.pickle", "wb") as handle:
-                        pickle.dump(self.outputs[rec][j-1], handle)
 
                 # Wrap it up and finish
                 if j == self.max_runs and hflag == 1:

@@ -90,4 +90,5 @@ class Recorders:
                     else:
                         results[f"Mode{k + 1}"].append(op.nodeEigenvector(int(f"{self.geometry.nbays + 1}{st + 1}"),
                                                                           k + 1, 1))
+
         return results

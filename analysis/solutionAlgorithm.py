@@ -31,8 +31,11 @@ class SolutionAlgorithm:
             self.TEST_TYPE = 'NormDispIncr'
             self.TOL = 1e-04
         else:
-            self.TEST_TYPE = 'EnergyIncr'
-            self.TOL = 1e-08
+            # TODO, the effects of tolerances and tests should be tested
+            self.TEST_TYPE = 'NormDispIncr'
+            self.TOL = 1e-04
+            # self.TEST_TYPE = 'EnergyIncr'
+            # self.TOL = 1e-06
         self.ITER = 50
         self.ALGORITHM_TYPE = 'KrylovNewton'
         self.c_index = 0

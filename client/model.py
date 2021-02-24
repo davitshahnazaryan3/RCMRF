@@ -477,7 +477,6 @@ class Model:
             nst = max(self.sections["x"]["Storey"])
             spans_x = np.diff(self.g.widths[0])
             spans_y = np.diff(self.g.widths[1])
-
             for st in range(1, nst + 1):
                 for xbay in range(1, nbays_x + 2):
                     for ybay in range(1, nbays_y + 2):
@@ -521,7 +520,6 @@ class Model:
                         # Mass based on tributary area
                         q = self.loads[(self.loads["Pattern"] == "q") & (self.loads["Storey"] == st)]["Load"].iloc[0]
                         mass = area * q / 9.81
-
                         op.mass(nodetag, mass, mass, self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
 
         else:
@@ -558,6 +556,29 @@ class Model:
 
         elif analysis == 'MA' or analysis == 'modal':
             results = r.ma_recorder(num_modes)
+
+            # Calculation of other modal properties
+            # Masses lumped at each storey level
+            masses = self.loads[(self.loads['Pattern'] == 'mass')].reset_index(drop=True)
+
+            # Mass matrix
+            M = np.zeros((self.g.nst, self.g.nst))
+            for st in range(self.g.nst):
+                if self.flag3d:
+                    # Assumption
+                    M[st][st] = 2 * masses[(masses['Storey'] == st + 1)]['Load'].iloc[0]
+                else:
+                    M[st][st] = masses[(masses['Storey'] == st + 1)]['Load'].iloc[0]
+
+            # Modal shape
+            modalShape = np.array(results["Mode1"])
+            modalShape = np.abs(modalShape) / np.max(np.abs(modalShape), axis=0)
+
+            # Identity matrix
+            identity = np.ones((1, self.g.nst))
+            gamma = (modalShape.transpose().dot(M)).dot(identity.transpose()) / \
+                    (modalShape.transpose().dot(M)).dot(modalShape)
+            mstar = (modalShape.transpose().dot(M)).dot(identity.transpose())
 
         elif analysis == 'ELF' or analysis == 'ELFM':
             results = r.st_recorder(base_nodes)
@@ -776,7 +797,7 @@ class Model:
 
         if 'MA' in self.analysis_type or 'modal' in self.analysis_type:
             print('[STEP] Modal analysis started')
-            m = Modal(self.NUM_MODES, self.DAMP_MODES, damping, self.direction)
+            m = Modal(self.NUM_MODES, self.DAMP_MODES, damping)
             self.results['Modal'] = self.set_recorders('MA', num_modes=self.NUM_MODES)
             self.results['Modal']['Periods'] = m.period
             self.results['Modal']['Damping'] = m.xi_modes
@@ -806,8 +827,14 @@ class Model:
                     id_ctrl_node = int(f"{self.g.nst + 1}{self.g.nbays + 1}20")
                 else:
                     id_ctrl_node = int(f"{self.g.nbays + 1}{self.g.nst}")
+                # Number of bays
+                nbays_x = self.g.nbays
+                nbays_y = None
             else:
                 id_ctrl_node = int(f"{self.g.nbays[0] + 1}{self.g.nbays[1] + 1}{self.g.nst}")
+                nbays_x = self.g.nbays[0]
+                nbays_y = self.g.nbays[1]
+
             # DOF associated with the direction of interest
             id_ctrl_dof = self.direction + 1
 
@@ -817,8 +844,11 @@ class Model:
             # Call the SPO object
             spo = SPO(id_ctrl_node, id_ctrl_dof, self.base_cols, dref=dref, flag3d=self.flag3d,
                       direction=self.direction)
+
+            # TODO, for example if period of direction 0 is smaller, then spo_pattern should be assigned as the second
+            #  one, not supported yet, so should be set manually (urgent)
             spo.load_pattern(control_nodes, load_pattern=spo_pattern, heights=self.g.heights, mode_shape=mode_shape,
-                             nbays_x=self.g.nbays[0], nbays_y=self.g.nbays[1])
+                             nbays_x=nbays_x, nbays_y=nbays_y)
             spo.set_analysis()
             outputs = spo.seek_solution()
             filepath = self.outputsDir / 'SPO'
@@ -866,11 +896,13 @@ class Model:
                             eleHinge = hinge_x[(hinge_x["Element"] == "Column") & (hinge_x["Bay"] == xbay) & (
                                     hinge_x["Storey"] == st)].reset_index(drop=True).iloc[0]
                             elements["Columns"]["x"].append(et)
+
                         elif (xbay == 1 or xbay == nbays_x + 1) and (1 < ybay < nbays_y + 1):
                             # Columns of seismic frames along y direction
                             eleHinge = hinge_y[(hinge_y["Element"] == "Column") & (hinge_y["Bay"] == ybay) & (
                                     hinge_y["Storey"] == st)].reset_index(drop=True).iloc[0]
                             elements["Columns"]["y"].append(et)
+
                         else:
                             # Columns of gravity frames
                             eleHinge = hinge_gr[(hinge_gr["Element"] == "Column") & (hinge_gr["Storey"] ==
@@ -938,7 +970,7 @@ class Model:
                 if ele['Element'] == 'Beam':
                     # Beam elements
                     et = f"2{ele['Bay']}{ele['Storey']}"
-                    transfTag = self.BEAM_Y_TRANSF_TAG
+                    transfTag = self.BEAM_X_TRANSF_TAG
                     elements['Beams'].append(et)
 
                 else:
