@@ -5,6 +5,7 @@ import openseespy.opensees as op
 import numpy as np
 import pandas as pd
 import pickle
+import os
 from analysis.solutionAlgorithm import SolutionAlgorithm
 from analysis.static import Static
 from client.model import Model
@@ -253,6 +254,11 @@ class IDA_HTF_3D:
         :param output_dir: str              Outputs directory
         :return: None
         """
+        if os.path.exists(output_dir.parents[0] / "IM.csv"):
+            im_filename = output_dir.parents[0] / "IM_temp.csv"
+        else:
+            im_filename = output_dir.parents[0] / "IM.csv"
+
         # Get the ground motion set information
         eqnms_list_x, eqnms_list_y, dts_list, durs_list = self.get_gm()
         nrecs = len(dts_list)
@@ -341,6 +347,7 @@ class IDA_HTF_3D:
                     if self.export_at_each_step:
                         with open(output_dir / f"Record{rec + 1}_Run{j}.pickle", "wb") as handle:
                             pickle.dump(self.outputs[rec][j], handle)
+                        np.savetxt(im_filename, self.IM_output, delimiter=',')
 
                     # Check the hunted run for collapse
                     """
@@ -408,6 +415,7 @@ class IDA_HTF_3D:
                     if self.export_at_each_step:
                         with open(output_dir / f"Record{rec + 1}_Run{j}.pickle", "wb") as handle:
                             pickle.dump(self.outputs[rec][j], handle)
+                        np.savetxt(im_filename, self.IM_output, delimiter=',')
 
                     if th.c_index > 0:
                         # Stop tracing
@@ -468,6 +476,7 @@ class IDA_HTF_3D:
                     if self.export_at_each_step:
                         with open(output_dir / f"Record{rec + 1}_Run{j}.pickle", "wb") as handle:
                             pickle.dump(self.outputs[rec][j], handle)
+                        np.savetxt(im_filename, self.IM_output, delimiter=',')
 
                     # Increment run number
                     j += 1

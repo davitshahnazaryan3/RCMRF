@@ -28,7 +28,7 @@ class Master:
     def __init__(self, sections_file, loads_file, materials_file, outputsDir, gmdir=None, gmfileNames=None, IM_type=2,
                  max_runs=15, analysis_time_step=.01, drift_capacity=10., analysis_type=None, system="Perimeter",
                  hinge_model="Hysteretic", flag3d=False, direction=0, export_at_each_step=False,
-                 period_assignment=None):
+                 period_assignment=None, periods_ida=None):
         """
         Initializes master file
         :param sections_file: str                   Name of file containing section data in '*.csv' format
@@ -53,6 +53,7 @@ class Master:
         :param direction: int                       Direction of analysis
         :param export_at_each_step: bool            Exporting at each step, i.e. record-run
         :param period_assignment: dict              Period assigment IDs (for 3D only)
+        :param periods_ida: list                    Periods to use for IDA, optional, in case MA periods are not needed
         """
         # list of strings for 3D modelling, and string for 2D modelling
         self.sections_file = sections_file
@@ -74,6 +75,7 @@ class Master:
         self.export_at_each_step = export_at_each_step
         self.direction = direction
         self.period_assignment = period_assignment
+        self.periods_ida = periods_ida
         self.APPLY_GRAVITY_ELF = False
         self.FIRST_INT = .05
         self.INCR_STEP = .05
@@ -180,14 +182,18 @@ class Master:
             try:
                 with open(self.outputsDir / "MA.json") as f:
                     results = json.load(f)
-                    if self.flag3d:
-
-                        period = [results["Periods"][self.period_assignment["x"]],
-                                  results["Periods"][self.period_assignment["y"]]]
+                    if self.periods_ida is None:
+                        if self.flag3d:
+                            period = [results["Periods"][self.period_assignment["x"]],
+                                      results["Periods"][self.period_assignment["y"]]]
+                        else:
+                            period = results["Periods"][0]
+                        damping = results["Damping"][0]
+                        omegas = results["CircFreq"]
                     else:
-                        period = results["Periods"][0]
-                    damping = results["Damping"][0]
-                    omegas = results["CircFreq"]
+                        period = self.periods_ida
+                        damping = 0.05
+                        omegas = 2 * np.pi / (np.array(period))
 
             except:
                 raise ValueError("[EXCEPTION] Modal analysis data do not exist.")
@@ -267,11 +273,12 @@ if __name__ == "__main__":
     flag3d = True
     export_at_each_step = True
     period_assignment = {"x": 0, "y": 1}
-
+    periods = [0.72, 0.60]
     # Let's go...
     m = Master(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
                analysis_type=analysis_type, system="Perimeter", hinge_model=hingeModel, flag3d=flag3d,
-               direction=direction, export_at_each_step=export_at_each_step, period_assignment=period_assignment)
+               direction=direction, export_at_each_step=export_at_each_step, period_assignment=period_assignment,
+               periods_ida=periods)
 
     m.wipe()
     m.run_model()
