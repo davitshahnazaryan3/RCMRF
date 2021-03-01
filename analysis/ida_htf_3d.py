@@ -226,6 +226,9 @@ class IDA_HTF_3D:
         :param fy: float                            Scaling factor in y direction
         :return:
         """
+        # Delete the old analysis and all it's component objects
+        op.wipeAnalysis()
+
         w1 = self.omegas[0]
         w2 = self.omegas[1]
         a0 = 2 * w1 * w2 / (w2 ** 2 - w1 ** 2) * (w2 * self.xi - w1 * self.xi)
@@ -239,10 +242,9 @@ class IDA_HTF_3D:
         if self.flag3d:
             op.pattern('UniformExcitation', self.PTAGY, 2, '-accel', self.TSTAGY)
 
-        # Delete the old analysis and all it's component objects
-        op.wipeAnalysis()
         if self.flag3d:
-            op.constraints('Penalty', 1.0e15, 1.0e15)
+            # op.constraints('Penalty', 1.0e15, 1.0e15)
+            op.constraints("Transformation")
         else:
             op.constraints('Plain')
         op.numberer('RCM')
@@ -267,7 +269,8 @@ class IDA_HTF_3D:
         self.IM_output = np.zeros((nrecs, self.max_runs))
 
         # Loop for each record
-        for rec in range(nrecs):
+        # TODO
+        for rec in range(2):
             # Counting starts from 0
             self.outputs[rec] = {}
             # Get the ground motion set information

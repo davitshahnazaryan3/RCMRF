@@ -173,6 +173,7 @@ class Sections:
         # Shear parameters
         nu = 0.2
         Gc = float(self.materials['Ec']) * 1000.0 / 2.0 / (1 + nu)
+        J = ele["b"] * ele["h"] * (ele["b"]**2 + ele["h"]**2) / 12
 
         # Node IDs connecting the elements
         if not flag3d:
@@ -214,10 +215,46 @@ class Sections:
 
         # Elastic section
         if flag3d:
-            op.section('Elastic', intTag, float(self.materials['Ec']) * 1000.0, area, iy, iz, Gc, self.UBIG)
+            op.section('Elastic', intTag, float(self.materials['Ec']) * 1000.0, area, iy, iz, Gc, J)
         else:
             op.section('Elastic', intTag, float(self.materials['Ec']) * 1000.0, area, iz)
+
+        # Create the plastic hinge flexural section about ZZ
         op.section('Uniaxial', phTag1, matTag1, 'Mz')
         op.section('Uniaxial', phTag2, matTag2, 'Mz')
-        op.beamIntegration('HingeRadau', integrationTag, phTag1, ele['lp'], phTag2, ele['lp'], intTag)
+
+        if transfTag == 1 and flag3d:
+            # Transformation tag 1 refers to the columns
+            # Additional hinges are required for bidirectional response for the columns in the 3D model
+            # Since those are symmetrical square columns, i.e. designed to have the same properties along both principal
+            # directions, then the properties will match.
+            # TODO, add support for rectangular columns
+            # Additional tags for the materials
+            matTag3 = int(f'111{et}')
+            matTag4 = int(f'112{et}')
+            axialTag = int(f'113{et}')
+            aggTag1 = int(f"114{et}")
+            aggTag2 = int(f"115{et}")
+
+            # Beam integration
+            op.beamIntegration('HingeRadau', integrationTag, aggTag1, ele['lp'], aggTag2, ele['lp'], intTag)
+
+            # Create he plastic hinge axial material
+            op.uniaxialMaterial("Elastic", axialTag, float(self.materials['Ec']) * 1000.0 * area)
+
+            # Create the plastic hinge materials
+            op.uniaxialMaterial('Hysteretic', matTag3, ele['m1'], ele['phi1'], ele['m2'], ele['phi2'], ele['m3'],
+                                ele['phi3'], -ele['m1Neg'], -ele['phi1Neg'], -ele['m2Neg'], -ele['phi2Neg'],
+                                -ele['m3Neg'], -ele['phi3Neg'], pinchX, pinchY, damage1, damage2, beta)
+            op.uniaxialMaterial('Hysteretic', matTag4, ele['m1'], ele['phi1'], ele['m2'], ele['phi2'], ele['m3'],
+                                ele['phi3'], -ele['m1Neg'], -ele['phi1Neg'], -ele['m2Neg'], -ele['phi2Neg'],
+                                -ele['m3Neg'], -ele['phi3Neg'], pinchX, pinchY, damage1, damage2, beta)
+
+            # Aggregate P and Myy behaviour to Mzz behaviour
+            op.section("Aggregator", aggTag1, axialTag, "P", matTag3, "My", "-section", phTag1)
+            op.section("Aggregator", aggTag2, axialTag, "P", matTag4, "My", "-section", phTag2)
+        else:
+            # Beam integration
+            op.beamIntegration('HingeRadau', integrationTag, phTag1, ele['lp'], phTag2, ele['lp'], intTag)
+
         op.element('forceBeamColumn', int(et), iNode, jNode, transfTag, integrationTag)

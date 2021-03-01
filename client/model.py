@@ -221,12 +221,9 @@ class Model:
             raise Exception('[EXCEPTION] Wrong transformation type provided')
         else:
             if self.flag3d:
-                if self.direction == 0:
-                    op.geomTransf(col_transf_type, self.COL_TRANSF_TAG, 0, 1, 0)
-                else:
-                    op.geomTransf(col_transf_type, self.COL_TRANSF_TAG, 1, 0, 0)
+                op.geomTransf(col_transf_type, self.COL_TRANSF_TAG, 0, 1, 0)
                 op.geomTransf(beam_transf_tag, self.BEAM_X_TRANSF_TAG, 0, 1, 0)
-                op.geomTransf(beam_transf_tag, self.BEAM_Y_TRANSF_TAG, 1, 0, 0)
+                op.geomTransf(beam_transf_tag, self.BEAM_Y_TRANSF_TAG, -1, 0, 0)
             else:
                 op.geomTransf(col_transf_type, self.COL_TRANSF_TAG)
                 op.geomTransf(beam_transf_tag, self.BEAM_X_TRANSF_TAG)
@@ -624,100 +621,101 @@ class Model:
                         spans_x = np.diff(self.g.widths[0])
                         spans_y = np.diff(self.g.widths[1])
 
-                        for d in elements["Beams"]:
-                            for beam in elements["Beams"][d]:
-                                st = int(str(beam)[-1])
-                                xbay = int(str(beam)[1])
-                                ybay = int(str(beam)[2])
-                                q = loads[loads["Storey"] == st]["Load"].iloc[0]
+                        for beam in elements["Beams"][ele]:
+                            st = int(str(beam)[-1])
+                            xbay = int(str(beam)[1])
+                            ybay = int(str(beam)[2])
+                            q = loads[loads["Storey"] == st]["Load"].iloc[0]
 
-                                if d == "x" or d == "gravity_x":
-                                    # Beams along X direction
-                                    # Load over a beam
-                                    control_length = spans_y[ybay - 1] if ybay < len(spans_y) + 1 else spans_y[ybay - 2]
-                                    if spans_x[xbay - 1] <= control_length:
+                            if ele == "x" or ele == "gravity_x":
+                                # Beams along X direction
+                                # Load over a beam
+                                control_length = spans_y[ybay - 1] if ybay < len(spans_y) + 1 else spans_y[ybay - 2]
+                                if spans_x[xbay - 1] <= control_length:
+                                    # Triangular rule
+                                    load = q * spans_x[xbay - 1] ** 2 / 4 / spans_x[xbay - 1]
+                                else:
+                                    # Trapezoidal rule
+                                    load = 1 / 4 * q * spans_y[ybay - 1] * (
+                                                2 * spans_x[xbay - 1] - spans_y[ybay - 1]) / spans_x[xbay - 1]
+
+                                # End nodes
+                                nodei = beam - 3000
+                                nodej = beam - 3000 + 100
+
+                                if apply_point:
+                                    op.load(nodei, self.NEGLIGIBLE, self.NEGLIGIBLE, -load * spans_x[xbay - 1] / 2,
+                                            self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
+                                    op.load(nodej, self.NEGLIGIBLE, self.NEGLIGIBLE, -load * spans_x[xbay - 1] / 2,
+                                            self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
+                                else:
+                                    op.eleLoad('-ele', beam, '-type', '-beamUniform', -load, self.NEGLIGIBLE)
+
+                                # Additional load for interior beams
+                                if 1 < ybay < len(spans_y) + 1:
+                                    if spans_x[xbay - 1] <= spans_y[ybay - 2]:
                                         # Triangular rule
                                         load = q * spans_x[xbay - 1] ** 2 / 4 / spans_x[xbay - 1]
                                     else:
                                         # Trapezoidal rule
-                                        load = 1 / 4 * q * spans_y[ybay - 1] * (
-                                                    2 * spans_x[xbay - 1] - spans_y[ybay - 1]) / \
-                                               spans_x[xbay - 1]
+                                        load = 1 / 4 * q * spans_y[ybay - 2] * (
+                                                    2 * spans_x[xbay - 1] - spans_y[ybay - 2]) / spans_x[xbay - 1]
 
-                                    # End nodes
-                                    nodei = beam - 3000
-                                    nodej = beam - 3000 + 100
-
+                                    # Applying the load
                                     if apply_point:
-                                        op.load(nodei, self.NEGLIGIBLE, self.NEGLIGIBLE, -load / 2, self.NEGLIGIBLE,
-                                                self.NEGLIGIBLE, self.NEGLIGIBLE)
-                                        op.load(nodej, self.NEGLIGIBLE, self.NEGLIGIBLE, -load / 2, self.NEGLIGIBLE,
-                                                self.NEGLIGIBLE, self.NEGLIGIBLE)
+                                        op.load(nodei, self.NEGLIGIBLE, self.NEGLIGIBLE,
+                                                -load * spans_x[xbay - 1] / 2,
+                                                self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
+                                        op.load(nodej, self.NEGLIGIBLE, self.NEGLIGIBLE,
+                                                -load * spans_x[xbay - 1] / 2,
+                                                self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
                                     else:
                                         op.eleLoad('-ele', beam, '-type', '-beamUniform', -load, self.NEGLIGIBLE)
-
-                                    # Additional load for interior beams
-                                    if 1 < ybay < len(spans_y) + 1:
-                                        if spans_x[xbay - 1] <= spans_y[ybay - 2]:
-                                            # Triangular rule
-                                            load = q * spans_x[xbay - 1] ** 2 / 4 / spans_x[xbay - 1]
-                                        else:
-                                            # Trapezoidal rule
-                                            load = 1 / 4 * q * spans_y[ybay - 2] * (
-                                                        2 * spans_x[xbay - 1] - spans_y[ybay - 2]) / \
-                                                   spans_x[xbay - 1]
-
-                                        # Applying the load
-                                        if apply_point:
-                                            op.load(nodei, self.NEGLIGIBLE, self.NEGLIGIBLE, -load / 2,
-                                                    self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
-                                            op.load(nodej, self.NEGLIGIBLE, self.NEGLIGIBLE, -load / 2,
-                                                    self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
-                                        else:
-                                            op.eleLoad('-ele', beam, '-type', '-beamUniform', -load, self.NEGLIGIBLE)
+                            else:
+                                # Beams along Y direction
+                                # Load over a beam
+                                control_length = spans_x[xbay - 1] if xbay < len(spans_x) + 1 else spans_x[xbay - 2]
+                                if spans_y[ybay - 1] <= control_length:
+                                    # Triangular rule
+                                    load = q * spans_y[ybay - 1] ** 2 / 4 / spans_y[ybay - 1]
                                 else:
-                                    # Beams along Y direction
-                                    # Load over a beam
-                                    control_length = spans_x[xbay - 1] if xbay < len(spans_x) + 1 else spans_x[xbay - 2]
-                                    if spans_y[ybay - 1] <= control_length:
+                                    # Trapezoidal rule
+                                    load = 1 / 4 * q * spans_x[xbay - 1] * \
+                                           (2 * spans_y[ybay - 1] - spans_x[xbay - 1]) / spans_y[ybay - 1]
+
+                                # End nodes
+                                nodei = beam - 2000
+                                nodej = beam - 2000 + 10
+
+                                # Applying the load
+                                if apply_point:
+                                    op.load(nodei, self.NEGLIGIBLE, self.NEGLIGIBLE, -load * spans_y[ybay - 1] / 2,
+                                            self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
+                                    op.load(nodej, self.NEGLIGIBLE, self.NEGLIGIBLE, -load * spans_y[ybay - 1] / 2,
+                                            self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
+                                else:
+                                    op.eleLoad('-ele', beam, '-type', '-beamUniform', -load, self.NEGLIGIBLE)
+
+                                # Additional load for interior beams
+                                if 1 < xbay < len(spans_x) + 1:
+                                    if spans_y[ybay - 1] <= spans_x[xbay - 2]:
                                         # Triangular rule
                                         load = q * spans_y[ybay - 1] ** 2 / 4 / spans_y[ybay - 1]
                                     else:
                                         # Trapezoidal rule
-                                        load = 1 / 4 * q * spans_x[xbay - 1] * \
-                                               (2 * spans_y[ybay - 1] - spans_x[xbay - 1]) / spans_y[ybay - 1]
-
-                                    # End nodes
-                                    nodei = beam - 2000
-                                    nodej = beam - 2000 + 10
+                                        load = 1 / 4 * q * spans_x[xbay - 2] * \
+                                               (2 * spans_y[ybay - 1] - spans_x[xbay - 2]) / spans_y[ybay - 1]
 
                                     # Applying the load
                                     if apply_point:
-                                        op.load(nodei, self.NEGLIGIBLE, self.NEGLIGIBLE, -load / 2, self.NEGLIGIBLE,
-                                                self.NEGLIGIBLE, self.NEGLIGIBLE)
-                                        op.load(nodej, self.NEGLIGIBLE, self.NEGLIGIBLE, -load / 2, self.NEGLIGIBLE,
-                                                self.NEGLIGIBLE, self.NEGLIGIBLE)
+                                        op.load(nodei, self.NEGLIGIBLE, self.NEGLIGIBLE,
+                                                -load * spans_y[ybay - 1] / 2,
+                                                self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
+                                        op.load(nodej, self.NEGLIGIBLE, self.NEGLIGIBLE,
+                                                -load * spans_y[ybay - 1] / 2,
+                                                self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
                                     else:
-                                        op.eleLoad('-ele', beam, '-type', '-beamUniform', load, self.NEGLIGIBLE)
-
-                                    # Additional load for interior beams
-                                    if 1 < xbay < len(spans_x) + 1:
-                                        if spans_y[ybay - 1] <= spans_x[xbay - 2]:
-                                            # Triangular rule
-                                            load = q * spans_y[ybay - 1] ** 2 / 4 / spans_y[ybay - 1]
-                                        else:
-                                            # Trapezoidal rule
-                                            load = 1 / 4 * q * spans_x[xbay - 2] * \
-                                                   (2 * spans_y[ybay - 1] - spans_x[xbay - 2]) / spans_y[ybay - 1]
-
-                                        # Applying the load
-                                        if apply_point:
-                                            op.load(nodei, self.NEGLIGIBLE, self.NEGLIGIBLE, -load / 2,
-                                                    self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
-                                            op.load(nodej, self.NEGLIGIBLE, self.NEGLIGIBLE, -load / 2,
-                                                    self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
-                                        else:
-                                            op.eleLoad('-ele', beam, '-type', '-beamUniform', load, self.NEGLIGIBLE)
+                                        op.eleLoad('-ele', beam, '-type', '-beamUniform', -load, self.NEGLIGIBLE)
 
                     else:
                         load = distributed[(distributed['Storey'] == int(ele[-1]))]['Load'].iloc[0]
@@ -849,7 +847,7 @@ class Model:
             #  one, not supported yet, so should be set manually (urgent)
             spo.load_pattern(control_nodes, load_pattern=spo_pattern, heights=self.g.heights, mode_shape=mode_shape,
                              nbays_x=nbays_x, nbays_y=nbays_y)
-            spo.set_analysis()
+            spo.set_analysis(heights=self.g.heights)
             outputs = spo.seek_solution()
             filepath = self.outputsDir / 'SPO'
             with open(f"{filepath}.pickle", 'wb') as (f):

@@ -39,6 +39,7 @@ class Recorders:
         results['Element'] = {}
         results['Element']['Beam'] = {}
         results['Element']['Column'] = {}
+
         if self.flag3d:
             for d in self.elements['Beams']:
                 for beam in self.elements['Beams'][d]:

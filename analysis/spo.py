@@ -80,10 +80,10 @@ class SPO:
                         nodepush = int(f"{xbay}{ybay}{st}")
                         fpush = loads[st - 1]
                         if self.direction == 0:
-                            op.load(nodepush, fpush / n_nodes, self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE,
+                            op.load(nodepush, fpush, self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE,
                                     self.NEGLIGIBLE, self.NEGLIGIBLE)
                         else:
-                            op.load(nodepush, self.NEGLIGIBLE, fpush / n_nodes, self.NEGLIGIBLE, self.NEGLIGIBLE,
+                            op.load(nodepush, self.NEGLIGIBLE, fpush, self.NEGLIGIBLE, self.NEGLIGIBLE,
                                     self.NEGLIGIBLE, self.NEGLIGIBLE)
 
         else:
@@ -94,9 +94,10 @@ class SPO:
                 else:
                     op.load(nodepush, fpush, self.NEGLIGIBLE, self.NEGLIGIBLE)
 
-    def set_analysis(self):
+    def set_analysis(self, heights):
         """
         Sets up the initial analysis parameters
+        :param heights: list
         :return: None
         """
         print('[INITIALIZE] Static pushover analysis has commenced...')
@@ -109,7 +110,7 @@ class SPO:
         op.numberer('RCM')
         op.test(self.TEST_TYPE, self.TOL, self.ITERINIT)
         op.algorithm(self.ALGORITHM_TYPE)
-        op.integrator('DisplacementControl', self.cntr_node, self.disp_dir, self.dref / self.nstep)
+        op.integrator('DisplacementControl', self.cntr_node, self.disp_dir, 0.1 * heights[-1] / self.nstep)
         op.analysis('Static')
 
     def seek_solution(self):

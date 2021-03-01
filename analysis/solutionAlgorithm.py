@@ -31,7 +31,6 @@ class SolutionAlgorithm:
             self.TEST_TYPE = 'NormDispIncr'
             self.TOL = 1e-04
         else:
-            # TODO, the effects of tolerances and tests should be tested
             self.TEST_TYPE = 'NormDispIncr'
             self.TOL = 1e-04
             # self.TEST_TYPE = 'EnergyIncr'
@@ -189,8 +188,6 @@ class SolutionAlgorithm:
                 # At each storey level
                 for i in range(nst + 1):
                     if i == nst:
-                        # TODO, add option for recorders to create separate txt files and a recorder with timeseries
-                        #  for accelerations
                         # Index 0 indicates along X direction, and 1 indicates along Y direction
                         # Nodal accelerations in g
                         tempAccel[j, i, 0] = op.nodeAccel(int(self.tnode[0, i - 1]), j + 1) / 9.81

@@ -55,6 +55,7 @@ class Master:
         :param period_assignment: dict              Period assigment IDs (for 3D only)
         :param periods_ida: list                    Periods to use for IDA, optional, in case MA periods are not needed
         """
+        # TODO, add support for Haselton, currently only a placeholder, need to adapt for 3D etc.
         # list of strings for 3D modelling, and string for 2D modelling
         self.sections_file = sections_file
 
@@ -180,23 +181,23 @@ class Master:
             # Nonlinear time history analysis
             print("[INITIATE] IDA started")
             try:
-                with open(self.outputsDir / "MA.json") as f:
-                    results = json.load(f)
-                    if self.periods_ida is None:
-                        if self.flag3d:
-                            period = [results["Periods"][self.period_assignment["x"]],
-                                      results["Periods"][self.period_assignment["y"]]]
-                        else:
-                            period = results["Periods"][0]
-                        damping = results["Damping"][0]
-                        omegas = results["CircFreq"]
+                if self.periods_ida is None:
+                    with open(self.outputsDir / "MA.json") as f:
+                        results = json.load(f)
+                    if self.flag3d:
+                        period = [results["Periods"][self.period_assignment["x"]],
+                                  results["Periods"][self.period_assignment["y"]]]
                     else:
-                        period = self.periods_ida
-                        damping = 0.05
-                        omegas = 2 * np.pi / (np.array(period))
+                        period = results["Periods"][0]
+                    damping = results["Damping"][0]
+                    omegas = results["CircFreq"]
+                else:
+                    period = self.periods_ida
+                    damping = 0.05
+                    omegas = 2 * np.pi / (np.array(period))
 
             except:
-                raise ValueError("[EXCEPTION] Modal analysis data do not exist.")
+                raise ValueError("[EXCEPTION] Modal analysis data does not exist.")
 
             # Initialize
             ida = IDA_HTF_3D(self.FIRST_INT, self.INCR_STEP, self.max_runs, self.IM_type, period, damping, omegas,
@@ -223,7 +224,7 @@ class Master:
         else:
             # Runs static or modal analysis (ST or MA)
             m = self.call_model()
-            m.define_loads(m.elements)
+            m.define_loads(m.elements, apply_point=False)
             m.perform_analysis(damping=self.DAMPING)
 
 
@@ -267,8 +268,8 @@ if __name__ == "__main__":
 
     # RCMRF inputs
     hingeModel = "Hysteretic"
-    analysis_type = ["TH"]
-    # Run MA with direction = 0 always
+    analysis_type = ["MA"]
+    # Run MA always with direction = 0
     direction = 0
     flag3d = True
     export_at_each_step = True
@@ -278,7 +279,7 @@ if __name__ == "__main__":
     m = Master(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
                analysis_type=analysis_type, system="Perimeter", hinge_model=hingeModel, flag3d=flag3d,
                direction=direction, export_at_each_step=export_at_each_step, period_assignment=period_assignment,
-               periods_ida=periods)
+               periods_ida=periods, max_runs=15)
 
     m.wipe()
     m.run_model()
