@@ -243,8 +243,8 @@ class IDA_HTF_3D:
             op.pattern('UniformExcitation', self.PTAGY, 2, '-accel', self.TSTAGY)
 
         if self.flag3d:
-            # op.constraints('Penalty', 1.0e15, 1.0e15)
-            op.constraints("Transformation")
+            op.constraints('Penalty', 1.0e15, 1.0e15)
+            # op.constraints("Transformation")
         else:
             op.constraints('Plain')
         op.numberer('RCM')
@@ -269,8 +269,7 @@ class IDA_HTF_3D:
         self.IM_output = np.zeros((nrecs, self.max_runs))
 
         # Loop for each record
-        # TODO
-        for rec in range(2):
+        for rec in range(nrecs):
             # Counting starts from 0
             self.outputs[rec] = {}
             # Get the ground motion set information
@@ -295,7 +294,11 @@ class IDA_HTF_3D:
                     Tcond_x = self.T_info[0]
                     Tcond_y = self.T_info[1]
                 else:
-                    Tcond_x = Tcond_y = self.T_info
+                    if isinstance(self.T_info, float):
+                        Tcond_x = Tcond_y = self.T_info
+                    else:
+                        Tcond_x = Tcond_y = self.T_info[0]
+
                 sd, sv, sa = self.get_IM(eq_name_x, dts_list[rec], Tcond_x, self.xi)
                 IMx = sa
                 sd, sv, sa = self.get_IM(eq_name_y, dts_list[rec], Tcond_y, self.xi)

@@ -23,8 +23,13 @@ class SolutionAlgorithm:
         self.dt = dt
         self.tmax = tmax
         self.dc = dc
-        self.tnode = np.array(tnode)
-        self.bnode = np.array(bnode)
+        if flag3d:
+            self.tnode = np.array(tnode)
+            self.bnode = np.array(bnode)
+        else:
+            self.tnode = np.reshape(np.array(tnode), (1, 3))
+            self.bnode = np.reshape(np.array(bnode), (1, 3))
+
         self.pflag = pflag
         self.flag3d = flag3d
         if not self.flag3d:
@@ -139,10 +144,9 @@ class SolutionAlgorithm:
 
         # Set up the storey drift and acceleration values
         h = np.array([])
-        if self.flag3d:
-            nst = self.tnode.shape[1]
-        else:
-            nst = len(self.tnode)
+        # Number of storeys
+        nst = self.tnode.shape[1]
+
         maccel = np.zeros((d, nst + 1))
         mdrift = np.zeros((d, nst))
 
@@ -204,9 +208,9 @@ class SolutionAlgorithm:
                         tempDrift[j, i - 1, 0] = 100.0 * abs(tempDisp[j, i, 0] - tempDisp[j, i - 1, 0]) / cht
 
             # Appending into the global numpy arrays to return
-            accelerations = np.append(accelerations, tempAccel, axis=d)
-            displacements = np.append(displacements, tempDisp, axis=d)
-            drifts = np.append(drifts, tempDrift, axis=d)
+            accelerations = np.append(accelerations, tempAccel, axis=2)
+            displacements = np.append(displacements, tempDisp, axis=2)
+            drifts = np.append(drifts, tempDrift, axis=2)
 
             # # Base accelerations in [g] (this is going to be zero...)
             # base_accel = op.nodeAccel(int(self.bnode[0]), 1) / 9.81
@@ -229,8 +233,12 @@ class SolutionAlgorithm:
                 # Record the peak storey drifts
                 if cdrift_x >= mdrift[0, i - 1]:
                     mdrift[0, i - 1] = cdrift_x
-                if cdrift_y >= mdrift[1, i - 1]:
-                    mdrift[1, i - 1] = cdrift_y
+
+                if self.flag3d:
+                    if cdrift_y >= mdrift[1, i - 1]:
+                        mdrift[1, i - 1] = cdrift_y
+                else:
+                    cdrift_y = cdrift_x
 
                 if max(cdrift_x, cdrift_y) >= mdrift_init:
                     mdrift_init = max(cdrift_x, cdrift_y)

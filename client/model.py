@@ -603,8 +603,8 @@ class Model:
         if apply_loads:
             op.timeSeries('Linear', 1)
             op.pattern('Plain', 1, 1)
-            distributed = self.loads[(self.loads['Pattern'] == 'distributed')].reset_index(drop=True)
             if self.hingeModel == 'haselton':
+                distributed = self.loads[(self.loads['Pattern'] == 'distributed')].reset_index(drop=True)
                 for idx in range(1, self.g.nst + 1):
                     ele_ids = elements['Beams'][idx]
                     load = distributed[(distributed['Storey'] == idx)]['Load'].iloc[0]
@@ -718,6 +718,7 @@ class Model:
                                         op.eleLoad('-ele', beam, '-type', '-beamUniform', -load, self.NEGLIGIBLE)
 
                     else:
+                        distributed = self.loads[(self.loads['Pattern'] == 'distributed')].reset_index(drop=True)
                         load = distributed[(distributed['Storey'] == int(ele[-1]))]['Load'].iloc[0]
                         if apply_point:
                             # Storey and bay levels

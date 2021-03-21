@@ -4,3 +4,5 @@ database/*
 __pycache__/*
 analysis/__pycache__/'
 client/__pycache__/'
+runRCMRF2D.py
+runRCMRF.py

@@ -122,7 +122,7 @@ class Master:
         :return: class                                      Object Model
         """
         m = Model(self.analysis_type, self.sections_file, self.loads_file, self.materials_file, self.outputsDir,
-                  self.system, hingeModel=self.hinge_model, flag3d=self.flag3d, direction=direction)
+                  self.system, hingeModel=self.hinge_model, flag3d=self.flag3d, direction=self.direction)
         # Generate the model if specified
         if generate_model:
             m.model()
@@ -268,13 +268,13 @@ if __name__ == "__main__":
 
     # RCMRF inputs
     hingeModel = "Hysteretic"
-    analysis_type = ["MA"]
+    analysis_type = ["TH"]
     # Run MA always with direction = 0
     direction = 0
     flag3d = True
     export_at_each_step = True
     period_assignment = {"x": 0, "y": 1}
-    periods = [0.72, 0.60]
+    periods = [0.72, 0.62]
     # Let's go...
     m = Master(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
                analysis_type=analysis_type, system="Perimeter", hinge_model=hingeModel, flag3d=flag3d,

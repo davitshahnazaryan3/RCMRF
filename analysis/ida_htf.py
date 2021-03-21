@@ -227,7 +227,6 @@ class IDA_HTF:
         a0 = 2 * w1 * w2 / (w2 ** 2 - w1 ** 2) * (w2 * self.xi - w1 * self.xi)
         a1 = 2 * w1 * w2 / (w2 ** 2 - w1 ** 2) * (-self.xi / w2 + self.xi / w1)
 
-        # TODO, for 3Dflag, time series for both directions
         # Rayleigh damping
         op.rayleigh(a0, 0.0, 0.0, a1)
         op.timeSeries('Path', self.TSTAGX, '-dt', dt, '-filePath', str(pathx), '-factor', fx)
@@ -253,7 +252,7 @@ class IDA_HTF:
         self.IM_output = np.zeros((nrecs, self.max_runs))
 
         # Loop for each record
-        for rec in range(1):
+        for rec in range(nrecs):
             # Counting starts from 0
             self.outputs[rec] = {}
             # Get the ground motion set information

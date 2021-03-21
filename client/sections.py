@@ -173,7 +173,11 @@ class Sections:
         # Shear parameters
         nu = 0.2
         Gc = float(self.materials['Ec']) * 1000.0 / 2.0 / (1 + nu)
-        J = ele["b"] * ele["h"] * (ele["b"]**2 + ele["h"]**2) / 12
+        # Torsional moment of inertia
+        if ele["h"] >= ele["b"]:
+            J = ele["b"] * ele["h"]**3 * (16 / 3 - 3.36 * ele["h"] / ele["b"] * (1 - 1 / 12 * (ele["h"] / ele["b"])**4))
+        else:
+            J = ele["h"] * ele["b"]**3 * (16 / 3 - 3.36 * ele["b"] / ele["h"] * (1 - 1 / 12 * (ele["b"] / ele["h"])**4))
 
         # Node IDs connecting the elements
         if not flag3d:
