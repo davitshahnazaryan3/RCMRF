@@ -89,7 +89,7 @@ class IDA_HTF_3D:
             # Create the nonlinear model
             m.model()
             # Define gravity loads
-            m.define_loads(m.elements, apply_point=True)
+            m.define_loads(m.elements, apply_point=False)
             # Run static analysis
             s = Static()
             s.static_analysis(self.flag3d)
@@ -269,7 +269,7 @@ class IDA_HTF_3D:
         self.IM_output = np.zeros((nrecs, self.max_runs))
 
         # Loop for each record
-        for rec in range(nrecs):
+        for rec in range(24, nrecs):
             # Counting starts from 0
             self.outputs[rec] = {}
             # Get the ground motion set information

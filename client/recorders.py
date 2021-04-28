@@ -3,6 +3,7 @@ Defines recorders for the model
 Note: Recorders are very much generic, more options may be added as it suits the user
 """
 import openseespy.opensees as op
+import numpy as np
 
 
 class Recorders:
@@ -35,7 +36,7 @@ class Recorders:
                 node = base_nodes[n]
             results["Nodes"][node] = op.nodeReaction(node)
 
-        # Element recordders
+        # Element recorders
         results['Element'] = {}
         results['Element']['Beam'] = {}
         results['Element']['Column'] = {}
@@ -68,18 +69,80 @@ class Recorders:
 
         return results
 
-    def ma_recorder(self, num_modes):
+    def ma_recorder(self, num_modes, lam):
         """
         Records modal shapes
         :param num_modes: int                       Number of modal shapes to record
+        :param lam: list                            Eigenvectors
         :return: dict                               Dictionary containing modal shape information
         """
         if self.flag3d:
+
+            # Get all node rags
+            nodes = op.getNodeTags()
+
+            # Initialize mass computation
+            total_mass = np.array([0] * 6)
+
+            # Compute total masses
+            for node in nodes:
+                indf = len(op.nodeDisp(node))
+                for i in range(indf):
+                    total_mass[i] += op.nodeMass(node, i + 1)
+
+            # Results for each mode
+            mode_data = np.zeros((num_modes, 4))
+            mode_MPM = np.zeros((num_modes, 6))
+            mode_L = np.zeros((num_modes, 6))
+
+            # Extract eigenvalues to appropriate arrays
+            omega = []
+            freq = []
+            period = []
+            for m in range(num_modes):
+                omega.append(np.sqrt(lam[m]))
+                freq.append(np.sqrt(lam[m]) / 2 / np.pi)
+                period.append(2 * np.pi / np.sqrt(lam[m]))
+                mode_data[m, :] = np.array([lam[m], omega[m], freq[m], period[m]])
+
+                # Compute L and gm
+                L = np.zeros((6,))
+                gm = 0
+                for node in nodes:
+                    V = op.nodeEigenvector(node, m + 1)
+                    indf = len(op.nodeDisp(node))
+                    for i in range(indf):
+                        Mi = op.nodeMass(node, i + 1)
+                        Vi = V[i]
+                        Li = Mi * Vi
+                        gm += Vi ** 2 * Mi
+                        L[i] += Li
+                mode_L[m, :] = L
+
+                # Compute MPM
+                MPM = np.zeros((6,))
+                for i in range(6):
+                    Li = L[i]
+                    TMi = total_mass[i]
+                    MPMi = Li ** 2
+                    if gm > 0.0:
+                        MPMi = MPMi / gm
+                    if TMi > 0.0:
+                        MPMi = MPMi / TMi * 100.0
+                    MPM[i] = MPMi
+                mode_MPM[m, :] = MPM
+
+            # Get modal positions based on mass participation
+            positions = np.argmax(mode_MPM, axis=1)
+            # Take the first two, as for symmetric structures higher modes are not so important
+            positions = positions[:2]
+
             results = {"Mode1": [], "Mode2": []}
             for st in range(self.geometry.nst):
                 nodetag = int(f"{self.geometry.nbays[0] + 1}{self.geometry.nbays[1] + 1}{st + 1}")
-                results["Mode1"].append(op.nodeEigenvector(nodetag, 1, 1))
-                results["Mode2"].append(op.nodeEigenvector(nodetag, 2, 2))
+                # Mode 1 refers to X direction, and Mode 2 refers to Y direction
+                results["Mode1"].append(op.nodeEigenvector(nodetag, 1, int(positions[0] + 1)))
+                results["Mode2"].append(op.nodeEigenvector(nodetag, 2, int(positions[1] + 1)))
         else:
             results = {}
             for k in range(min(num_modes, 3)):
@@ -91,5 +154,6 @@ class Recorders:
                     else:
                         results[f"Mode{k + 1}"].append(op.nodeEigenvector(int(f"{self.geometry.nbays + 1}{st + 1}"),
                                                                           k + 1, 1))
+            positions = None
 
-        return results
+        return results, positions

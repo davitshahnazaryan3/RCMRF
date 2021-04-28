@@ -15,8 +15,7 @@ from analysis.spo import SPO
 
 
 class Model:
-
-    def __init__(self, analysis_type, sections_file, loads_file, materials, outputsDir, system='Perimeter',
+    def __init__(self, analysis_type, sections_file, loads_file, materials, outputsDir, system='perimeter',
                  hingeModel='haselton', flag3d=False, direction=0):
         """
         Initializes OpenSees model creator
@@ -63,7 +62,7 @@ class Model:
         self.elements = None
         self.analysis_type = analysis_type
         self.materials = pd.read_csv(materials)
-        self.system = system
+        self.system = system.lower()
         self.hingeModel = hingeModel.lower()
         self.flag3d = flag3d
         self.direction = direction
@@ -73,7 +72,8 @@ class Model:
         self.NEGLIGIBLE = 1e-09
         self.UBIG = 1.e10
         self.outputsDir = outputsDir
-        # Nodes for necessary for SPO analysis
+
+        # Nodes necessary for SPO analysis
         self.spo_nodes = []
         if self.flag3d:
             f = {}
@@ -119,10 +119,8 @@ class Model:
         Checks whether the input arguments have been supplied properly
         :return: None
         """
-        if self.system not in ('Perimeter', 'Space'):
+        if self.system not in ('perimeter', 'space'):
             raise ValueError('[EXCEPTION] Wrong system type provided, should be Perimeter or Space')
-        if self.system == "Space":
-            raise ValueError("[EXCEPTION] Currently space systems not supported!")
         if self.flag3d and self.hingeModel == "haselton":
             raise ValueError('[EXCEPTION] Currently 3D modelling with Haselton springs not supported!')
         print('[SUCCESS] Integrity of input arguments checked')
@@ -181,19 +179,23 @@ class Model:
             # Restraining ground floor nodes
             if zloc == 0 and nodetag < 10000:
                 if self.flag3d:
-                    # Fix or pin the base nodes
-                    if (xloc == 0. or xloc == max(spans_x)) and (yloc == 0. or yloc == max(spans_y)):
-                        # Fix the external columns of seismic frames
-                        op.fix(nodetag, 1, 1, 1, fix, fix, fix)
-                    elif 0. < xloc < max(spans_x) and (yloc == 0. or yloc == max(spans_y)):
-                        # Fix internal columns of X seismic frames against rotation in x direction
-                        op.fix(nodetag, 1, 1, 1, 0, fix, 0)
-                    elif 0. < yloc < max(spans_y) and (xloc == 0. or xloc == max(spans_x)):
-                        # Fix internal columns of Y seismic frames against rotation in y direction
-                        op.fix(nodetag, 1, 1, 1, fix, 0, 0)
+                    if self.system == "perimeter":
+                        # Fix or pin the base nodes
+                        if (xloc == 0. or xloc == max(spans_x)) and (yloc == 0. or yloc == max(spans_y)):
+                            # Fix the external columns of seismic frames
+                            op.fix(nodetag, 1, 1, 1, fix, fix, fix)
+                        elif 0. < xloc < max(spans_x) and (yloc == 0. or yloc == max(spans_y)):
+                            # Fix internal columns of X seismic frames against rotation in x direction
+                            op.fix(nodetag, 1, 1, 1, 0, fix, 0)
+                        elif 0. < yloc < max(spans_y) and (xloc == 0. or xloc == max(spans_x)):
+                            # Fix internal columns of Y seismic frames against rotation in y direction
+                            op.fix(nodetag, 1, 1, 1, fix, 0, 0)
+                        else:
+                            # Pin the columns of gravity columns
+                            op.fix(nodetag, 1, 1, 1, 0, 0, 0)
                     else:
-                        # Pin the columns of gravity columns
-                        op.fix(nodetag, 1, 1, 1, 0, 0, 0)
+                        # Fix or pin all base nodes
+                        op.fix(nodetag, 1, 1, 1, fix, fix, fix)
 
                 else:
                     # Fix the base columns
@@ -384,7 +386,7 @@ class Model:
         if 'pdelta' in list(self.loads['Pattern']):
             # Material definition
             pdelta_mat_tag = 300000 if self.hingeModel == 'haselton' else int(self.g.nbays + 2)
-            if self.system == 'Perimeter':
+            if self.system == 'perimeter':
                 op.uniaxialMaterial('Elastic', pdelta_mat_tag, young_modulus)
 
             # X coordinate of the columns
@@ -527,13 +529,11 @@ class Model:
                         m = masses[(masses['Storey'] == st + 1)]['Load'].iloc[0] / (2 * self.g.nbays)
                     else:
                         m = masses[(masses['Storey'] == st + 1)]['Load'].iloc[0] / self.g.nbays
-
                     # Assign the masses
                     if self.hingeModel == 'haselton':
                         op.mass(int(f"{st + 2}{bay + 1}10"), m, self.NEGLIGIBLE, self.NEGLIGIBLE)
                     else:
                         op.mass(int(f"{bay + 1}{st + 1}"), m, self.NEGLIGIBLE, self.NEGLIGIBLE)
-
             else:
                 print('[SUCCESS] Seismic masses have been defined')
 
@@ -552,30 +552,8 @@ class Model:
             results = r.st_recorder(base_nodes)
 
         elif analysis == 'MA' or analysis == 'modal':
-            results = r.ma_recorder(num_modes)
-
-            # Calculation of other modal properties
-            # Masses lumped at each storey level
-            masses = self.loads[(self.loads['Pattern'] == 'mass')].reset_index(drop=True)
-
-            # Mass matrix
-            M = np.zeros((self.g.nst, self.g.nst))
-            for st in range(self.g.nst):
-                if self.flag3d:
-                    # Assumption
-                    M[st][st] = 2 * masses[(masses['Storey'] == st + 1)]['Load'].iloc[0]
-                else:
-                    M[st][st] = masses[(masses['Storey'] == st + 1)]['Load'].iloc[0]
-
-            # Modal shape
-            modalShape = np.array(results["Mode1"])
-            modalShape = np.abs(modalShape) / np.max(np.abs(modalShape), axis=0)
-
-            # Identity matrix
-            identity = np.ones((1, self.g.nst))
-            gamma = (modalShape.transpose().dot(M)).dot(identity.transpose()) / \
-                    (modalShape.transpose().dot(M)).dot(modalShape)
-            mstar = (modalShape.transpose().dot(M)).dot(identity.transpose())
+            lam = kwargs.get('lam', None)
+            results = r.ma_recorder(num_modes, lam)
 
         elif analysis == 'ELF' or analysis == 'ELFM':
             results = r.st_recorder(base_nodes)
@@ -716,7 +694,6 @@ class Model:
                                                 self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
                                     else:
                                         op.eleLoad('-ele', beam, '-type', '-beamUniform', -load, self.NEGLIGIBLE)
-
                     else:
                         distributed = self.loads[(self.loads['Pattern'] == 'distributed')].reset_index(drop=True)
                         load = distributed[(distributed['Storey'] == int(ele[-1]))]['Load'].iloc[0]
@@ -797,10 +774,21 @@ class Model:
         if 'MA' in self.analysis_type or 'modal' in self.analysis_type:
             print('[STEP] Modal analysis started')
             m = Modal(self.NUM_MODES, self.DAMP_MODES, damping)
-            self.results['Modal'] = self.set_recorders('MA', num_modes=self.NUM_MODES)
-            self.results['Modal']['Periods'] = m.period
-            self.results['Modal']['Damping'] = m.xi_modes
-            self.results['Modal']['CircFreq'] = m.omega
+            self.results['Modal'], positions = self.set_recorders('MA', num_modes=self.NUM_MODES, lam=m.lam)
+
+            # Modify positions of modal parameters
+            if positions is not None:
+                omega = [m.omega[i] for i in positions]
+                xi_modes = [m.xi_modes[i] for i in positions]
+                period = [m.period[i] for i in positions]
+            else:
+                omega = m.omega
+                xi_modes = m.xi_modes
+                period = m.period
+
+            self.results['Modal']['Periods'] = period
+            self.results['Modal']['Damping'] = xi_modes
+            self.results['Modal']['CircFreq'] = omega
 
             filepath = self.outputsDir / 'MA'
             with open(f"{filepath}.json", 'w') as (f):
@@ -844,8 +832,6 @@ class Model:
             spo = SPO(id_ctrl_node, id_ctrl_dof, self.base_cols, dref=dref, flag3d=self.flag3d,
                       direction=self.direction)
 
-            # TODO, for example if period of direction 0 is smaller, then spo_pattern should be assigned as the second
-            #  one, not supported yet, so should be set manually (urgent)
             spo.load_pattern(control_nodes, load_pattern=spo_pattern, heights=self.g.heights, mode_shape=mode_shape,
                              nbays_x=nbays_x, nbays_y=nbays_y)
             spo.set_analysis(heights=self.g.heights)
@@ -911,7 +897,6 @@ class Model:
                         # Base columns
                         if st == 1:
                             base_cols.append(et)
-
                         s.hysteretic_hinges(et, inode, jnode, eleHinge, transfTag, self.flag3d)
 
             # Add beam elements in X direction
@@ -933,8 +918,8 @@ class Model:
                             elements["Beams"]["x"].append(et)
                         else:
                             # Beams within gravity frames in X direction
-                            eleHinge = hinge_gr[(hinge_gr["Element"] == "Beam") & (
-                                    hinge_gr["Storey"] == st)].reset_index(drop=True).iloc[0]
+                            eleHinge = hinge_gr[(hinge_gr["Element"] == "Beam") & (hinge_gr["Storey"] == st)
+                                                & (hinge_gr["Direction"] == 0)].reset_index(drop=True).iloc[0]
                             elements["Beams"]["gravity_x"].append(et)
                         s.hysteretic_hinges(et, inode, jnode, eleHinge, transfTag, self.flag3d)
 
@@ -956,8 +941,8 @@ class Model:
                                     hinge_y["Storey"] == st)].reset_index(drop=True).iloc[0]
                             elements["Beams"]["y"].append(et)
                         else:
-                            eleHinge = hinge_gr[(hinge_gr["Element"] == "Beam") & (hinge_gr["Storey"] ==
-                                                                                   st)].reset_index(drop=True).iloc[0]
+                            eleHinge = hinge_gr[(hinge_gr["Element"] == "Beam") & (hinge_gr["Storey"] == st)
+                                                & (hinge_gr["Direction"] == 1)].reset_index(drop=True).iloc[0]
                             elements["Beams"]["gravity_y"].append(et)
                         s.hysteretic_hinges(et, inode, jnode, eleHinge, transfTag, self.flag3d)
 

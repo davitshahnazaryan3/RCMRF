@@ -38,4 +38,3 @@ class Static:
         op.analyze(self.NSTEP)
         # Maintain constant gravity loads and reset time to zero
         op.loadConst('-time', 0.0)
-

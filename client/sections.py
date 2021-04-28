@@ -232,7 +232,6 @@ class Sections:
             # Additional hinges are required for bidirectional response for the columns in the 3D model
             # Since those are symmetrical square columns, i.e. designed to have the same properties along both principal
             # directions, then the properties will match.
-            # TODO, add support for rectangular columns
             # Additional tags for the materials
             matTag3 = int(f'111{et}')
             matTag4 = int(f'112{et}')

@@ -16,9 +16,10 @@ class Modal:
         self.num_modes = num_modes
         self.damp_modes = damp_modes
         self.damping = damping
-        lam = self.compute_eigenvectors()
+        self.lam = self.compute_eigenvectors()
         self.record_stuff()
-        self.omega, self.freq, self.period = self.extract_eigenvalues(lam)
+        self.omega, self.freq, self.period = self.extract_eigenvalues(self.lam)
+
         self.xi_modes = self.get_damping(self.omega)
 
     def compute_eigenvectors(self):
