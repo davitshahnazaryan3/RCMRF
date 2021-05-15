@@ -1,5 +1,9 @@
 Generic RC MRF model creator
 
+Includes both 3D and 2D modelling
+
+Requires: OpenSeesPy
+
 Step-by-step procedure
 *A. Master file
 B. Model file (Model)
