@@ -216,7 +216,6 @@ class Sections:
         op.uniaxialMaterial('Hysteretic', matTag2, ele['m1'], ele['phi1'], ele['m2'], ele['phi2'], ele['m3'],
                             ele['phi3'], -ele['m1Neg'], -ele['phi1Neg'], -ele['m2Neg'], -ele['phi2Neg'], -ele['m3Neg'],
                             -ele['phi3Neg'], pinchX, pinchY, damage1, damage2, beta)
-
         # Elastic section
         if flag3d:
             op.section('Elastic', intTag, float(self.materials['Ec']) * 1000.0, area, iy, iz, Gc, J)
@@ -242,7 +241,7 @@ class Sections:
             # Beam integration
             op.beamIntegration('HingeRadau', integrationTag, aggTag1, ele['lp'], aggTag2, ele['lp'], intTag)
 
-            # Create he plastic hinge axial material
+            # Create the plastic hinge axial material
             op.uniaxialMaterial("Elastic", axialTag, float(self.materials['Ec']) * 1000.0 * area)
 
             # Create the plastic hinge materials

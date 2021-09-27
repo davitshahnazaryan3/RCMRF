@@ -6,7 +6,7 @@ import openseespy.opensees as op
 
 class Static:
     def __init__(self):
-        self.NSTEP = 10
+        self.NSTEP = 1
         self.TOL = 1e-08
 
     def static_analysis(self, flag3d=False):
@@ -21,15 +21,17 @@ class Static:
         op.integrator('LoadControl', dgravity)
         # Renumber dofs to minimize band-width (optimization)
         op.numberer('RCM')
-        # How to store and solve the system of equations in the analysis (large model: try UmfPack)
-        op.system('UmfPack')
         # Handling of boundary conditions
         if flag3d:
             op.constraints('Penalty', 1.0e15, 1.0e15)
+            # Determine if convergence has been achieved at the end of an iteration step
+            op.test('EnergyIncr', self.TOL, 10)
+            # How to store and solve the system of equations in the analysis (large model: try UmfPack)
+            op.system('UmfPack')
         else:
-            op.constraints('Transformation')
-        # Determine if convergence has been achieved at the end of an iteration step
-        op.test('EnergyIncr', self.TOL, 10)
+            op.constraints('Plain')
+            op.test('NormDispIncr', self.TOL, 6)
+            op.system('BandGeneral')
         # Use Newton's solution algorithm: updates tangent stiffness at every iteration
         op.algorithm('Newton')
         # Define type of analysis (static or transient)

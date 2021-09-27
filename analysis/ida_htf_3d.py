@@ -269,7 +269,7 @@ class IDA_HTF_3D:
         self.IM_output = np.zeros((nrecs, self.max_runs))
 
         # Loop for each record
-        for rec in range(24, nrecs):
+        for rec in range(nrecs):
             # Counting starts from 0
             self.outputs[rec] = {}
             # Get the ground motion set information
@@ -332,8 +332,8 @@ class IDA_HTF_3D:
                         IM[j - 1] = IM[j - 2] + (j - 1) * self.incr_step
 
                     # Determine the scale factor that needs to be applied to the record
-                    sf_x = IM[j - 1] / IM_geomean * self.g
-                    sf_y = IM[j - 1] / IM_geomean * self.g
+                    sf_x = round(IM[j - 1] / IM_geomean * self.g, 3)
+                    sf_y = round(IM[j - 1] / IM_geomean * self.g, 3)
 
                     run = f"Record{rec + 1}_Run{j}"
                     if self.pflag:
@@ -402,8 +402,9 @@ class IDA_HTF_3D:
                     IMtr = IM[j - 2] + inctr
 
                     IM[j - 1] = IMtr
-                    sf_x = IM[j - 1] / IM_geomean * self.g
-                    sf_y = IM[j - 1] / IM_geomean * self.g
+                    sf_x = round(IM[j - 1] / IM_geomean * self.g, 3)
+                    sf_y = round(IM[j - 1] / IM_geomean * self.g, 3)
+
                     # Record into the outputs file
                     self.IM_output[rec, j-1] = IMtr
                     run = f"Record{rec + 1}_Run{j}"
@@ -463,8 +464,8 @@ class IDA_HTF_3D:
 
                     IM[j-1] = IMfil
                     IMlist = np.append(IMlist, IMfil)
-                    sf_x = IM[j - 1] / IM_geomean * self.g
-                    sf_y = IM[j - 1] / IM_geomean * self.g
+                    sf_x = round(IM[j - 1] / IM_geomean * self.g, 3)
+                    sf_y = round(IM[j - 1] / IM_geomean * self.g, 3)
 
                     # Record into the outputs file
                     self.IM_output[rec, j-1] = IMfil

@@ -69,7 +69,7 @@ class Model:
         self.COL_TRANSF_TAG = 1
         self.BEAM_X_TRANSF_TAG = 2
         self.BEAM_Y_TRANSF_TAG = 3
-        self.NEGLIGIBLE = 1e-09
+        self.NEGLIGIBLE = 1.e-09
         self.UBIG = 1.e10
         self.outputsDir = outputsDir
 
@@ -79,16 +79,29 @@ class Model:
             f = {}
             cols = None
             for i in sections_file:
-                f[i] = pd.read_csv(sections_file[i])
+                try:
+                    f[i] = pd.read_csv(sections_file[i])
+                except:
+                    f[i] = sections_file[i]
                 cols = [j for j in f[i].columns if j not in ('Element', 'Position', 'Storey', 'Bay', "Direction")]
 
                 for col in cols:
                     f[i][col] = f[i][col].astype(float)
 
+            # Rename keys of f
+            try:
+                f["x"] = f.pop("x_seismic")
+                f["y"] = f.pop("y_seismic")
+            except:
+                pass
+
             self.sections = f
 
         else:
-            self.sections = pd.read_csv(sections_file)
+            try:
+                self.sections = pd.read_csv(sections_file)
+            except:
+                self.sections = sections_file
 
             cols = [i for i in self.sections.columns if i not in ('Element', 'Position', 'Storey', 'Bay', "Direction")]
 
@@ -616,6 +629,7 @@ class Model:
                                     # Trapezoidal rule
                                     load = 1 / 4 * q * spans_y[ybay - 1] * (
                                                 2 * spans_x[xbay - 1] - spans_y[ybay - 1]) / spans_x[xbay - 1]
+                                load = round(load, 2)
 
                                 # End nodes
                                 nodei = beam - 3000
@@ -627,7 +641,7 @@ class Model:
                                     op.load(nodej, self.NEGLIGIBLE, self.NEGLIGIBLE, -load * spans_x[xbay - 1] / 2,
                                             self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
                                 else:
-                                    op.eleLoad('-ele', beam, '-type', '-beamUniform', -load, self.NEGLIGIBLE)
+                                    op.eleLoad('-ele', beam, '-type', '-beamUniform', +load, self.NEGLIGIBLE)
 
                                 # Additional load for interior beams
                                 if 1 < ybay < len(spans_y) + 1:
@@ -638,6 +652,7 @@ class Model:
                                         # Trapezoidal rule
                                         load = 1 / 4 * q * spans_y[ybay - 2] * (
                                                     2 * spans_x[xbay - 1] - spans_y[ybay - 2]) / spans_x[xbay - 1]
+                                    load = round(load, 2)
 
                                     # Applying the load
                                     if apply_point:
@@ -648,7 +663,8 @@ class Model:
                                                 -load * spans_x[xbay - 1] / 2,
                                                 self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
                                     else:
-                                        op.eleLoad('-ele', beam, '-type', '-beamUniform', -load, self.NEGLIGIBLE)
+                                        op.eleLoad('-ele', beam, '-type', '-beamUniform', +load, self.NEGLIGIBLE)
+
                             else:
                                 # Beams along Y direction
                                 # Load over a beam
@@ -660,6 +676,7 @@ class Model:
                                     # Trapezoidal rule
                                     load = 1 / 4 * q * spans_x[xbay - 1] * \
                                            (2 * spans_y[ybay - 1] - spans_x[xbay - 1]) / spans_y[ybay - 1]
+                                load = round(load, 2)
 
                                 # End nodes
                                 nodei = beam - 2000
@@ -672,7 +689,7 @@ class Model:
                                     op.load(nodej, self.NEGLIGIBLE, self.NEGLIGIBLE, -load * spans_y[ybay - 1] / 2,
                                             self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
                                 else:
-                                    op.eleLoad('-ele', beam, '-type', '-beamUniform', -load, self.NEGLIGIBLE)
+                                    op.eleLoad('-ele', beam, '-type', '-beamUniform', +load, self.NEGLIGIBLE)
 
                                 # Additional load for interior beams
                                 if 1 < xbay < len(spans_x) + 1:
@@ -683,6 +700,7 @@ class Model:
                                         # Trapezoidal rule
                                         load = 1 / 4 * q * spans_x[xbay - 2] * \
                                                (2 * spans_y[ybay - 1] - spans_x[xbay - 2]) / spans_y[ybay - 1]
+                                    load = round(load, 2)
 
                                     # Applying the load
                                     if apply_point:
@@ -693,7 +711,8 @@ class Model:
                                                 -load * spans_y[ybay - 1] / 2,
                                                 self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
                                     else:
-                                        op.eleLoad('-ele', beam, '-type', '-beamUniform', -load, self.NEGLIGIBLE)
+                                        op.eleLoad('-ele', beam, '-type', '-beamUniform', +load, self.NEGLIGIBLE)
+
                     else:
                         distributed = self.loads[(self.loads['Pattern'] == 'distributed')].reset_index(drop=True)
                         load = distributed[(distributed['Storey'] == int(ele[-1]))]['Load'].iloc[0]

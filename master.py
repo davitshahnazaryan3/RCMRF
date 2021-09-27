@@ -16,6 +16,7 @@ Hinge model information for gravity frame elements (not necessary for 2D)
 """
 import openseespy.opensees as op
 from client.model import Model
+from analysis.static import Static
 from pathlib import Path
 import numpy as np
 import os
@@ -126,6 +127,11 @@ class Master:
         # Generate the model if specified
         if generate_model:
             m.model()
+            if "PO" in self.analysis_type:
+                m.define_loads(m.elements, apply_point=False)
+                s = Static()
+                s.static_analysis(self.flag3d)
+
         return m
 
     def run_model(self):
@@ -149,9 +155,11 @@ class Master:
                     modal_analysis_outputs = json.load(f)
                 # Modal shape as the SPO lateral load pattern shape
                 if self.direction == 0:
-                    mode_shape = np.abs(modal_analysis_outputs["Mode1"])
+                    tag = self.period_assignment["x"]
+                    mode_shape = np.abs(modal_analysis_outputs[f"Mode{tag+1}"])
                 else:
-                    mode_shape = np.abs(modal_analysis_outputs["Mode2"])
+                    tag = self.period_assignment["y"]
+                    mode_shape = np.abs(modal_analysis_outputs[f"Mode{tag+1}"])
                 # Normalize, helps to avoid convergence issues
                 mode_shape = mode_shape / max(mode_shape)
                 mode_shape = np.round(mode_shape, 2)

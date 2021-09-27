@@ -29,7 +29,7 @@ class SPO:
         self.direction = direction
         self.TEST_TYPE = 'NormDispIncr' if not self.flag3d else 'EnergyIncr'
         self.ALGORITHM_TYPE = 'KrylovNewton'
-        self.NEGLIGIBLE = 1e-09
+        self.NEGLIGIBLE = 1.e-09
 
     def load_pattern(self, nodes, load_pattern=2, heights=None, mode_shape=None, nbays_x=None, nbays_y=None):
         """
