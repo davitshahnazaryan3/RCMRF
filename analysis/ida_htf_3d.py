@@ -95,7 +95,8 @@ class IDA_HTF_3D:
             s.static_analysis(self.flag3d)
         return m
 
-    def read_text_file(self, name, col):
+    @staticmethod
+    def read_text_file(name, col):
         """
         Reads a text file
         :param name: str                            Name of text file in "*.txt" format

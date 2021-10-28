@@ -1,10 +1,25 @@
 <h1 align="center">Generic RC MRF model creator</h1>
 
-Procedures to create a reinforced concrete building (3D) or a frame (2D) nonlinear structural model
-consisting of moment resisting frames as the primary lateral load resisting system.
+Procedures to create a reinforced concrete building (3D), or a frame (2D) nonlinear structural model
+consisting of moment resisting frames (MRF) as the primary lateral load resisting system.
 
+**Required libraries**: requirements.txt
+
+
+### Table of Contents
+<details open>
+<summary>Show/Hide</summary>
+<br>
+
+1. [Step-by-step procedure](#steps)
+
+</details>
 
 ### Step-by-step procedure
+<details>
+<a name="steps"></a>
+<summary>Show/Hide</summary>
+<br>
 
 * Master file
 * Model file (Model)
@@ -28,6 +43,6 @@ consisting of moment resisting frames as the primary lateral load resisting syst
 			* TH - time history/IDA - analysis.IDA_HTF, analysis.SolutionAlgorithm
 		
 	13. Set recorders - set_recorders, client.Recorders
-
-
+	
+</details>
 
