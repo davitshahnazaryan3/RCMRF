@@ -18,22 +18,21 @@ def get_time(start_time):
 start_time = timeit.default_timer()
 
 # Directories
-input_dir = Path.cwd().parents[0] / ".applications/Loss Validation Manuscript/space/EC8/case12a"
+input_dir = Path.cwd()
 materials_file = input_dir / "materials.csv"
 loads_file = input_dir / "action.csv"
 
 outputsDir = input_dir / "RCMRF"
-# section_file_x = input_dir / "Cache/framex/hinge_models.csv"
-# section_file_y = input_dir / "Cache/framey/hinge_models.csv"
-# section_file_gr = input_dir / "Cache/gravity_hinges.csv"
-# Directories
-# section_file = {"x": section_file_x, "y": section_file_y, "gravity": section_file_gr}
 
-# section_file = input_dir / "Cache/hinge_models.pickle"
-# with open(section_file, "rb") as f:
-#     section_file = pickle.load(f)
+site = "LAquila"
+if site == "Milano":
+    seismicity = "low"
+elif site == "Ancona":
+    seismicity = "medium"
+else:
+    seismicity = "high"
 
-section_file = input_dir / "hinge_models.pickle"
+section_file = outputsDir / f"hinge_models_{site}.pickle"
 # section_file = Path.cwd().parents[0] / "tests/hinge_temp.pickle"
 with open(section_file, "rb") as f:
     section_file = pickle.load(f)
@@ -45,16 +44,16 @@ gmfileNames = ["GMR_names1.txt", "GMR_names2.txt", "GMR_dts.txt", "GMR_durs.txt"
 # RCMRF inputs
 hingeModel = "hysteretic"
 system = "space"
-analysis_type = ["TH"]
+analysis_type = []
 direction = 0
 flag3d = True
 export_at_each_step = True
 period_assignment = {"x": 1, "y": 0}
-periods = [1.42, 1.39]
+periods = [0.95, 0.90]
 m = Master(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
            analysis_type=analysis_type, system=system, hinge_model=hingeModel, flag3d=flag3d,
            direction=direction, export_at_each_step=export_at_each_step, period_assignment=period_assignment,
-           periods_ida=periods, max_runs=15)
+           periods_ida=periods, max_runs=15, tcl_filename=f"model_{seismicity}")
 
 m.wipe()
 m.run_model()

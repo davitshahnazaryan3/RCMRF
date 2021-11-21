@@ -23,13 +23,14 @@ import os
 import json
 import pickle
 from analysis.ida_htf_3d import IDA_HTF_3D
+from client.modelToTCL import ModelToTCL
 
 
 class Master:
     def __init__(self, sections_file, loads_file, materials_file, outputsDir, gmdir=None, gmfileNames=None, IM_type=2,
                  max_runs=15, analysis_time_step=.01, drift_capacity=10., analysis_type=None, system="Perimeter",
                  hinge_model="Hysteretic", flag3d=False, direction=0, export_at_each_step=False,
-                 period_assignment=None, periods_ida=None):
+                 period_assignment=None, periods_ida=None, tcl_filename=None):
         """
         Initializes master file
         :param sections_file: str                   Name of file containing section data in '*.csv' format
@@ -89,6 +90,8 @@ class Master:
         self.DTS_FILE = gmdir / gmfileNames[2]
         self.DURS_FILE = gmdir / gmfileNames[3]
 
+        self.tcl_filename = tcl_filename
+
         # Create an outputs directory if none exists
         self.createFolder(outputsDir)
 
@@ -122,8 +125,9 @@ class Master:
         :param generate_model: bool                         Generate model or not
         :return: class                                      Object Model
         """
-        m = Model(self.analysis_type, self.sections_file, self.loads_file, self.materials_file, self.outputsDir,
-                  self.system, hingeModel=self.hinge_model, flag3d=self.flag3d, direction=self.direction)
+        m = ModelToTCL(self.analysis_type, self.sections_file, self.loads_file, self.materials_file, self.outputsDir,
+                       self.system, hingeModel=self.hinge_model, flag3d=self.flag3d, direction=self.direction,
+                       tcl_filename=self.tcl_filename)
         # Generate the model if specified
         if generate_model:
             m.model()
@@ -156,10 +160,10 @@ class Master:
                 # Modal shape as the SPO lateral load pattern shape
                 if self.direction == 0:
                     tag = self.period_assignment["x"]
-                    mode_shape = np.abs(modal_analysis_outputs[f"Mode{tag+1}"])
+                    mode_shape = np.abs(modal_analysis_outputs[f"Mode{tag + 1}"])
                 else:
                     tag = self.period_assignment["y"]
-                    mode_shape = np.abs(modal_analysis_outputs[f"Mode{tag+1}"])
+                    mode_shape = np.abs(modal_analysis_outputs[f"Mode{tag + 1}"])
                 # Normalize, helps to avoid convergence issues
                 mode_shape = mode_shape / max(mode_shape)
                 mode_shape = np.round(mode_shape, 2)
@@ -237,17 +241,19 @@ class Master:
 
 
 if __name__ == "__main__":
-
     def truncate(n, decimals=0):
         multiplier = 10 ** decimals
         return int(n * multiplier) / multiplier
+
 
     def get_time(start_time):
         elapsed = timeit.default_timer() - start_time
         print('Running time: ', truncate(elapsed, 2), ' seconds')
         print('Running time: ', truncate(elapsed / float(60), 2), ' minutes')
 
+
     import timeit
+
     start_time = timeit.default_timer()
 
     # Directories
@@ -276,7 +282,7 @@ if __name__ == "__main__":
 
     # RCMRF inputs
     hingeModel = "Hysteretic"
-    analysis_type = ["TH"]
+    analysis_type = []
     # Run MA always with direction = 0
     direction = 0
     flag3d = True
@@ -287,7 +293,7 @@ if __name__ == "__main__":
     m = Master(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
                analysis_type=analysis_type, system="Perimeter", hinge_model=hingeModel, flag3d=flag3d,
                direction=direction, export_at_each_step=export_at_each_step, period_assignment=period_assignment,
-               periods_ida=periods, max_runs=15)
+               periods_ida=periods, max_runs=15, tcl_filename="low")
 
     m.wipe()
     m.run_model()
