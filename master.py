@@ -131,10 +131,11 @@ class Master:
         # Generate the model if specified
         if generate_model:
             m.model()
+
             if "PO" in self.analysis_type:
                 m.define_loads(m.elements, apply_point=False)
                 s = Static()
-                s.static_analysis(self.flag3d)
+                s.static_analysis(self.outputsDir, self.flag3d)
 
         return m
 
@@ -157,6 +158,7 @@ class Master:
                 # Static pushover analysis needs to be run after modal analysis
                 with open(self.outputsDir / "MA.json") as f:
                     modal_analysis_outputs = json.load(f)
+
                 # Modal shape as the SPO lateral load pattern shape
                 if self.direction == 0:
                     tag = self.period_assignment["x"]
@@ -164,6 +166,7 @@ class Master:
                 else:
                     tag = self.period_assignment["y"]
                     mode_shape = np.abs(modal_analysis_outputs[f"Mode{tag + 1}"])
+
                 # Normalize, helps to avoid convergence issues
                 mode_shape = mode_shape / max(mode_shape)
                 mode_shape = np.round(mode_shape, 2)
@@ -282,7 +285,7 @@ if __name__ == "__main__":
 
     # RCMRF inputs
     hingeModel = "Hysteretic"
-    analysis_type = []
+    analysis_type = ["ST"]
     # Run MA always with direction = 0
     direction = 0
     flag3d = True

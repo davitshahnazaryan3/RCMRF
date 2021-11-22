@@ -44,7 +44,7 @@ gmfileNames = ["GMR_names1.txt", "GMR_names2.txt", "GMR_dts.txt", "GMR_durs.txt"
 # RCMRF inputs
 hingeModel = "hysteretic"
 system = "space"
-analysis_type = []
+analysis_type = ["PO"]
 direction = 0
 flag3d = True
 export_at_each_step = True

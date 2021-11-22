@@ -151,13 +151,13 @@ class ModelToTCL:
 
             # Write to tcl file
             if "PO" in self.analysis_type:
-                filename = self.outputsDir / f"Models/model_{self.tcl_filename}_pushover.tcl"
+                filename = self.outputsDir / f"Models/{self.tcl_filename}_pushover.tcl"
             elif 'ST' in self.analysis_type or 'static' in self.analysis_type or 'gravity' in self.analysis_type:
-                filename = self.outputsDir / f"Models/model_{self.tcl_filename}_static.tcl"
+                filename = self.outputsDir / f"Models/{self.tcl_filename}_static.tcl"
             elif 'MA' in self.analysis_type or 'modal' in self.analysis_type:
-                filename = self.outputsDir / f"Models/model_{self.tcl_filename}_modal.tcl"
+                filename = self.outputsDir / f"Models/{self.tcl_filename}_modal.tcl"
             else:
-                filename = self.outputsDir / f"Models/model_{self.tcl_filename}.tcl"
+                filename = self.outputsDir / f"Models/{self.tcl_filename}.tcl"
 
             lines = ["# Create Model Global", "wipe;", "model BasicBuilder -ndm 3 -ndf 6;"]
             self.file = open(filename, "w+")
@@ -573,7 +573,7 @@ class ModelToTCL:
                         mass = area * q / 9.81
                         op.mass(nodetag, mass, mass, mass, self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
                         self.file.write(f"\nmass {nodetag} {mass} {mass} {mass} {self.NEGLIGIBLE} {self.NEGLIGIBLE} "
-                                        f"{self.NEGLIGIBLE}")
+                                        f"{self.NEGLIGIBLE};")
 
         else:
             masses = self.loads[(self.loads['Pattern'] == 'mass')].reset_index(drop=True)
@@ -607,7 +607,7 @@ class ModelToTCL:
 
         elif analysis == 'MA' or analysis == 'modal':
             lam = kwargs.get('lam', None)
-            results = r.ma_recorder(num_modes, lam)
+            results = r.ma_recorder(num_modes, lam, self.outputsDir)
 
         elif analysis == 'ELF' or analysis == 'ELFM':
             results = r.st_recorder(base_nodes)
@@ -627,6 +627,8 @@ class ModelToTCL:
                                                         will be given to point loads)
         :return: None
         """
+        self.file.write("\n\n# Apply gravity loads")
+
         # For now, point loads are not created for Haselton model, so force distributed loads
         if self.hingeModel == "haselton":
             apply_loads = True
@@ -635,6 +637,7 @@ class ModelToTCL:
         if apply_loads:
             op.timeSeries('Linear', 1)
             op.pattern('Plain', 1, 1)
+            self.file.write("\npattern Plain 1 Linear {")
             if self.hingeModel == 'haselton':
                 distributed = self.loads[(self.loads['Pattern'] == 'distributed')].reset_index(drop=True)
                 for idx in range(1, self.g.nst + 1):
@@ -681,8 +684,17 @@ class ModelToTCL:
                                             self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
                                     op.load(nodej, self.NEGLIGIBLE, self.NEGLIGIBLE, -load * spans_x[xbay - 1] / 2,
                                             self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
+                                    self.file.write(f"\n\tload {nodei} {self.NEGLIGIBLE} {self.NEGLIGIBLE}"
+                                                    f" {-load * spans_x[xbay - 1] / 2} {self.NEGLIGIBLE}"
+                                                    f" {self.NEGLIGIBLE} {self.NEGLIGIBLE};")
+                                    self.file.write(f"\n\tload {nodej} {self.NEGLIGIBLE} {self.NEGLIGIBLE}"
+                                                    f" {-load * spans_x[xbay - 1] / 2} {self.NEGLIGIBLE}"
+                                                    f" {self.NEGLIGIBLE} {self.NEGLIGIBLE};")
+
                                 else:
-                                    op.eleLoad('-ele', beam, '-type', '-beamUniform', +load, self.NEGLIGIBLE)
+                                    op.eleLoad('-ele', beam, '-type', '-beamUniform', -load, self.NEGLIGIBLE)
+                                    self.file.write(f"\n\teleLoad -ele {beam} -type -beamUniform -{load} "
+                                                    f"{self.NEGLIGIBLE};")
 
                                 # Additional load for interior beams
                                 if 1 < ybay < len(spans_y) + 1:
@@ -703,8 +715,17 @@ class ModelToTCL:
                                         op.load(nodej, self.NEGLIGIBLE, self.NEGLIGIBLE,
                                                 -load * spans_x[xbay - 1] / 2,
                                                 self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
+                                        self.file.write(f"\n\tload {nodei} {self.NEGLIGIBLE} {self.NEGLIGIBLE}"
+                                                        f" {-load * spans_x[xbay - 1] / 2} {self.NEGLIGIBLE}"
+                                                        f" {self.NEGLIGIBLE} {self.NEGLIGIBLE};")
+                                        self.file.write(f"\n\tload {nodej} {self.NEGLIGIBLE} {self.NEGLIGIBLE}"
+                                                        f" {-load * spans_x[xbay - 1] / 2} {self.NEGLIGIBLE}"
+                                                        f" {self.NEGLIGIBLE} {self.NEGLIGIBLE};")
+
                                     else:
-                                        op.eleLoad('-ele', beam, '-type', '-beamUniform', +load, self.NEGLIGIBLE)
+                                        op.eleLoad('-ele', beam, '-type', '-beamUniform', -load, self.NEGLIGIBLE)
+                                        self.file.write(f"\n\teleLoad -ele {beam} -type -beamUniform -{load} "
+                                                        f"{self.NEGLIGIBLE};")
 
                             else:
                                 # Beams along Y direction
@@ -729,8 +750,17 @@ class ModelToTCL:
                                             self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
                                     op.load(nodej, self.NEGLIGIBLE, self.NEGLIGIBLE, -load * spans_y[ybay - 1] / 2,
                                             self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
+                                    self.file.write(f"\n\tload {nodei} {self.NEGLIGIBLE} {self.NEGLIGIBLE}"
+                                                    f" {-load * spans_y[ybay - 1] / 2} {self.NEGLIGIBLE}"
+                                                    f" {self.NEGLIGIBLE} {self.NEGLIGIBLE};")
+                                    self.file.write(f"\n\tload {nodej} {self.NEGLIGIBLE} {self.NEGLIGIBLE}"
+                                                    f" {-load * spans_y[ybay - 1] / 2} {self.NEGLIGIBLE}"
+                                                    f" {self.NEGLIGIBLE} {self.NEGLIGIBLE};")
+
                                 else:
-                                    op.eleLoad('-ele', beam, '-type', '-beamUniform', +load, self.NEGLIGIBLE)
+                                    op.eleLoad('-ele', beam, '-type', '-beamUniform', -load, self.NEGLIGIBLE)
+                                    self.file.write(f"\n\teleLoad -ele {beam} -type -beamUniform -{load} "
+                                                    f"{self.NEGLIGIBLE};")
 
                                 # Additional load for interior beams
                                 if 1 < xbay < len(spans_x) + 1:
@@ -751,8 +781,16 @@ class ModelToTCL:
                                         op.load(nodej, self.NEGLIGIBLE, self.NEGLIGIBLE,
                                                 -load * spans_y[ybay - 1] / 2,
                                                 self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
+                                        self.file.write(f"\n\tload {nodei} {self.NEGLIGIBLE} {self.NEGLIGIBLE}"
+                                                        f" {-load * spans_y[ybay - 1] / 2} {self.NEGLIGIBLE}"
+                                                        f" {self.NEGLIGIBLE} {self.NEGLIGIBLE};")
+                                        self.file.write(f"\n\tload {nodej} {self.NEGLIGIBLE} {self.NEGLIGIBLE}"
+                                                        f" {-load * spans_y[ybay - 1] / 2} {self.NEGLIGIBLE}"
+                                                        f" {self.NEGLIGIBLE} {self.NEGLIGIBLE};")
                                     else:
-                                        op.eleLoad('-ele', beam, '-type', '-beamUniform', +load, self.NEGLIGIBLE)
+                                        op.eleLoad('-ele', beam, '-type', '-beamUniform', -load, self.NEGLIGIBLE)
+                                        self.file.write(f"\n\teleLoad -ele {beam} -type -beamUniform -{load} "
+                                                        f"{self.NEGLIGIBLE};")
 
                     else:
                         distributed = self.loads[(self.loads['Pattern'] == 'distributed')].reset_index(drop=True)
@@ -777,6 +815,8 @@ class ModelToTCL:
                 print('[SUCCESS] Gravity loads as point loads have been defined')
             else:
                 print('[SUCCESS] Gravity loads aas distributed loads have been defined')
+
+            self.file.write("\n};")
 
     def perform_analysis(self, elfm_filename=None, **kwargs):
         """
@@ -821,7 +861,7 @@ class ModelToTCL:
         if 'ST' in self.analysis_type or 'static' in self.analysis_type or 'gravity' in self.analysis_type:
             print('[STEP] Gravity static analysis started')
             s = Static()
-            s.static_analysis(self.flag3d)
+            s.static_analysis(self.outputsDir, self.flag3d)
             self.results['Gravity'] = self.set_recorders('ST', base_nodes=self.base_nodes)
 
             filepath = self.outputsDir / 'ST'
@@ -832,8 +872,13 @@ class ModelToTCL:
             print('[SUCCESS] Static gravity analysis done')
 
         if 'MA' in self.analysis_type or 'modal' in self.analysis_type:
+            self.file.write("\n\n# Call Modal analysis")
+            self.file.write("\nsource modal_recorders.tcl")
+            self.file.write("\nsource modal_analysis.tcl")
+            self.file.write("\nwipe;")
+
             print('[STEP] Modal analysis started')
-            m = Modal(self.NUM_MODES, self.DAMP_MODES, damping)
+            m = Modal(self.NUM_MODES, self.outputsDir, self.DAMP_MODES, damping)
             self.results['Modal'], positions = self.set_recorders('MA', num_modes=self.NUM_MODES, lam=m.lam)
 
             # Modify positions of modal parameters
@@ -853,10 +898,18 @@ class ModelToTCL:
             filepath = self.outputsDir / 'MA'
             with open(f"{filepath}.json", 'w') as (f):
                 json.dump(self.results['Modal'], f)
+
             print('[SUCCESS] Modal analysis done')
             mode_shape = self.results['Modal']['Mode1']
 
         if 'PO' in self.analysis_type or 'pushover' in self.analysis_type:
+            self.file.write("\n\n# Static analysis")
+            self.file.write("\nsource static.tcl")
+            self.file.write("\n\n# Call Pushover analysis")
+            self.file.write("\nsource spo_recorders.tcl")
+            self.file.write("\nsource spo_analysis.tcl")
+            self.file.write("\nwipe;")
+
             control_nodes = []
             for i in range(self.g.nst):
                 if not self.flag3d:
@@ -889,16 +942,17 @@ class ModelToTCL:
             dref = 0.1 * max(self.g.heights)
 
             # Call the SPO object
-            spo = SPO(id_ctrl_node, id_ctrl_dof, self.base_cols, dref=dref, flag3d=self.flag3d,
-                      direction=self.direction)
+            spo = SPO(id_ctrl_node, id_ctrl_dof, self.base_cols, self.base_nodes, dref, flag3d=self.flag3d,
+                      direction=self.direction, filename=self.outputsDir / "Models")
 
             spo.load_pattern(control_nodes, load_pattern=spo_pattern, heights=self.g.heights, mode_shape=mode_shape,
                              nbays_x=nbays_x, nbays_y=nbays_y)
             spo.set_analysis(heights=self.g.heights)
             outputs = spo.seek_solution()
-            filepath = self.outputsDir / 'SPO'
+            filepath = self.outputsDir / f'SPO_{self.tcl_filename[6:]}_{self.direction+1}'
             with open(f"{filepath}.pickle", 'wb') as (f):
                 pickle.dump(outputs, f)
+
             print('[SUCCESS] Static pushover analysis done')
 
     def lumped_hinge_element(self):
@@ -1053,7 +1107,7 @@ class ModelToTCL:
                     bee = int(f"{1 + xbay}{1 + ybay}{st}")
                     if bee != hive:
                         op.rigidDiaphragm(3, hive, bee)
-                        self.file.write(f"\nrigidDiaphragm 3 {hive} {bee}")
+                        self.file.write(f"\nrigidDiaphragm 3 {hive} {bee};")
             cnt += 1
 
     def model(self):

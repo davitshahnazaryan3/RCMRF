@@ -69,7 +69,7 @@ class Recorders:
 
         return results
 
-    def ma_recorder(self, num_modes, lam):
+    def ma_recorder(self, num_modes, lam, path):
         """
         Records modal shapes
         :param num_modes: int                       Number of modal shapes to record
@@ -138,11 +138,31 @@ class Recorders:
             positions = positions[:2]
 
             results = {"Mode1": [], "Mode2": []}
+
+            file = open(path / "Models/modal_recorders.tcl", "w+")
+            file.write("# Extracting first two modal shapes")
+            # file.write("\nset mode1 {};")
+            # file.write("\nset mode2 {};")
+
+            nstart = int(f"{self.geometry.nbays[0] + 1}{self.geometry.nbays[1] + 1}{1}")
+            nend = int(f"{self.geometry.nbays[0] + 1}{self.geometry.nbays[1] + 1}{self.geometry.nst}")
+
+            file.write('\nrecorder Node -file mode1.txt -nodeRange ' +
+                       f'{nstart} {nend} -dof {int(positions[0] + 1)} "eigen 1";')
+            file.write('\nrecorder Node -file mode2.txt -nodeRange ' +
+                       f'{nstart} {nend} -dof {int(positions[1] + 1)} "eigen 2";')
+
             for st in range(self.geometry.nst):
                 nodetag = int(f"{self.geometry.nbays[0] + 1}{self.geometry.nbays[1] + 1}{st + 1}")
+
                 # Mode 1 refers to X direction, and Mode 2 refers to Y direction
                 results["Mode1"].append(op.nodeEigenvector(nodetag, 1, int(positions[0] + 1)))
                 results["Mode2"].append(op.nodeEigenvector(nodetag, 2, int(positions[1] + 1)))
+                # file.write(f"\nlappend mode1 [nodeEigenvector {nodetag} 1 {int(positions[0] + 1)}]")
+                # file.write(f"\nlappend mode2 [nodeEigenvector {nodetag} 2 {int(positions[1] + 1)}]")
+
+            file.close()
+
         else:
             results = {}
             for k in range(min(num_modes, 3)):
