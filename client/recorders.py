@@ -85,10 +85,16 @@ class Recorders:
             total_mass = np.array([0] * 6)
 
             # Compute total masses
+            masses = np.zeros(self.geometry.nst)
+
             for node in nodes:
                 indf = len(op.nodeDisp(node))
                 for i in range(indf):
                     total_mass[i] += op.nodeMass(node, i + 1)
+
+                node = str(node)
+                if node[-1] != "0":
+                    masses[int(node[-1]) - 1] += op.nodeMass(int(node), 1)
 
             # Results for each mode
             mode_data = np.zeros((num_modes, 4))
@@ -152,6 +158,7 @@ class Recorders:
             file.write('\nrecorder Node -file mode2.txt -nodeRange ' +
                        f'{nstart} {nend} -dof {int(positions[1] + 1)} "eigen 2";')
 
+            modalShape = np.zeros((self.geometry.nst, 2))
             for st in range(self.geometry.nst):
                 nodetag = int(f"{self.geometry.nbays[0] + 1}{self.geometry.nbays[1] + 1}{st + 1}")
 
@@ -161,7 +168,43 @@ class Recorders:
                 # file.write(f"\nlappend mode1 [nodeEigenvector {nodetag} 1 {int(positions[0] + 1)}]")
                 # file.write(f"\nlappend mode2 [nodeEigenvector {nodetag} 2 {int(positions[1] + 1)}]")
 
+                # First mode shape (also for 2D model)
+                modalShape[st, 0] = op.nodeEigenvector(nodetag, 1, int(positions[0] + 1))
+                # Second mode shape
+                modalShape[st, 1] = op.nodeEigenvector(nodetag, 2, int(positions[1] + 1))
+
+            # Normalize the modal shapes (first two modes, most likely associated with X and Y directions unless there are
+            # large torsional effects)
+            modalShape = np.abs(modalShape) / np.max(np.abs(modalShape), axis=0)
+
+            # Calculate the first mode participation factor and effective modal mass
+            M = np.zeros((self.geometry.nst, self.geometry.nst))
+            for st in range(self.geometry.nst):
+                M[st][st] = masses[st]
+
+            # Identity matrix
+            identity = np.ones((1, self.geometry.nst))
+
+            gamma = np.zeros(2)
+            mstar = np.zeros(2)
+            for i in range(2):
+                # Modal participation factor
+                gamma[i] = (modalShape[:, i].transpose().dot(M)).dot(identity.transpose()) / \
+                           (modalShape[:, i].transpose().dot(M)).dot(modalShape[:, i])
+
+                # Modal mass
+                mstar[i] = (modalShape[:, i].transpose().dot(M)).dot(identity.transpose())
+
+            # Modify indices of modal properties as follows:
+            # index 0 = direction x
+            # index 1 = direction y
+            period = np.array([period[i] for i in range(len(positions))])
+            gamma = np.array([gamma[i] for i in range(len(positions))])
+            mstar = np.array([mstar[i] for i in range(len(positions))])
+
             file.close()
+
+            print(period, gamma, mstar)
 
         else:
             results = {}

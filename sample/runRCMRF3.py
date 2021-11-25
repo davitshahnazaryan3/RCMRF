@@ -2,6 +2,8 @@ from pathlib import Path
 from master import Master
 import timeit
 import pickle
+from visualize.get_rendering import *
+from visualize.utils_plotter import export_figure
 
 
 def truncate(n, decimals=0):
@@ -20,10 +22,11 @@ start_time = timeit.default_timer()
 # Directories
 input_dir = Path.cwd()
 materials_file = input_dir / "materials.csv"
+export_model_figs = False
 
 outputsDir = input_dir / "RCMRF"
 
-site = "LAquila"
+site = "Ancona"
 if site == "Milano":
     seismicity = "low"
 elif site == "Ancona":
@@ -58,6 +61,13 @@ m = Master(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gm
 
 m.wipe()
 m.run_model()
+
+if export_model_figs:
+    fig, _ = plot_model("nodes")
+    export_figure(fig, filename=outputsDir / "Models/figs/nodes", filetype="svg")
+
+    fig, _ = plot_model("elements")
+    export_figure(fig, filename=outputsDir / "Models/figs/elements", filetype="svg")
 
 # Wipe the model
 m.wipe()

@@ -2,6 +2,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import pickle
 from pathlib import Path
+import os
 
 from utils_plotter import *
 
@@ -27,27 +28,51 @@ class Visualize:
         self.export_dir = export_dir
         self.flag = flag
 
-    def plot_spo(self, filename, site="", direction=""):
+    def plot_spo(self, filename, site="", direction="", labels=None):
         """
         SPO plotter
         :param filename: str
         :return: None
         """
-        with open(filename, "rb") as f:
-            spo = pickle.load(f)
-
         fig, ax = plt.subplots(figsize=(4, 3), dpi=100)
-        plt.plot(spo[0] * 100, spo[1], color=self.grayscale[0])
+        if isinstance(filename, str):
+            with open(filename, "rb") as f:
+                spo = pickle.load(f)
+
+            maxvalx = max(spo[0]) * 100
+            maxvaly = max(spo[1])
+            plt.plot(spo[0] * 100, spo[1], color=self.grayscale[0])
+        else:
+            cnt = 0
+            maxvalx = -float("inf")
+            maxvaly = -float("inf")
+            for i in range(len(filename)):
+                model = filename[i]
+                if labels is not None:
+                    label = labels[i]
+                else:
+                    label = None
+
+                with open(model, "rb") as f:
+                    spo = pickle.load(f)
+
+                plt.plot(spo[0] * 100, spo[1], color=self.color_grid[cnt], label=label)
+                cnt += 2
+
+                if maxvalx < max(spo[0]) * 100:
+                    maxvalx = max(spo[0]) * 100
+                if maxvaly < max(spo[1]):
+                    maxvaly = max(spo[1])
 
         plt.xlabel("Top displacement [cm] ", fontsize=self.FONTSIZE)
         plt.ylabel('Base shear [kN]', fontsize=self.FONTSIZE)
         plt.grid(True, which="major", axis='both', ls="--", lw=1.0)
         plt.grid(True, which="minor", axis='both', ls="--", lw=0.5)
-        plt.xlim([0, int(max(spo[0]) * 100) + 20])
-        plt.ylim([0, int(max(spo[1])) + 300])
+        plt.xlim([0, int(maxvalx) + 20])
+        plt.ylim([0, int(maxvaly) + 300])
         plt.rc('xtick', labelsize=self.FONTSIZE)
         plt.rc('ytick', labelsize=self.FONTSIZE)
-        # plt.legend(frameon=False, loc='upper right', fontsize=self.FONTSIZE)
+        plt.legend(frameon=False, loc='upper right', fontsize=self.FONTSIZE)
 
         if self.flag:
             plt.show()
@@ -61,9 +86,13 @@ if __name__ == "__main__":
     export_dir = path / "sample/RCMRF/figs"
     create_folder(export_dir)
 
-    site = "low"
-    direction = "2"
-    spo_model = path / f"sample/RCMRF/SPO_{site}_{direction}.pickle"
+    f1 = path / f"sample/RCMRF/SPO_high_1.pickle"
+    f2 = path / f"sample/RCMRF/SPO_high_2.pickle"
+    f3 = path / f"sample/RCMRF/SPO_medium_1.pickle"
+    f4 = path / f"sample/RCMRF/SPO_medium_2.pickle"
+    spo_model = [f1, f2, f3, f4]
+
+    labels = ["high_x", "high_y", "medium_x", "medium_y"]
 
     viz = Visualize(export=True, filetype="png", export_dir=export_dir, flag=True)
-    viz.plot_spo(spo_model, site=site, direction=direction)
+    viz.plot_spo(spo_model, site="", direction="", labels=labels)
