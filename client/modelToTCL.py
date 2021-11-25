@@ -151,7 +151,8 @@ class ModelToTCL:
 
             # Write to tcl file
             if "PO" in self.analysis_type:
-                filename = self.outputsDir / f"Models/{self.tcl_filename}_pushover.tcl"
+                d = "x" if self.direction == 0 else "y"
+                filename = self.outputsDir / f"Models/{self.tcl_filename}_pushover_{d}.tcl"
             elif 'ST' in self.analysis_type or 'static' in self.analysis_type or 'gravity' in self.analysis_type:
                 filename = self.outputsDir / f"Models/{self.tcl_filename}_static.tcl"
             elif 'MA' in self.analysis_type or 'modal' in self.analysis_type:
@@ -906,8 +907,9 @@ class ModelToTCL:
             self.file.write("\n\n# Static analysis")
             self.file.write("\nsource static.tcl")
             self.file.write("\n\n# Call Pushover analysis")
-            self.file.write("\nsource spo_recorders.tcl")
-            self.file.write("\nsource spo_analysis.tcl")
+            d = "x" if self.direction == 0 else "y"
+            self.file.write(f"\nsource spo_recorders_{d}_{self.tcl_filename[6:]}.tcl")
+            self.file.write(f"\nsource spo_analysis_{d}_{self.tcl_filename[6:]}.tcl")
             self.file.write("\nwipe;")
 
             control_nodes = []
@@ -943,7 +945,7 @@ class ModelToTCL:
 
             # Call the SPO object
             spo = SPO(id_ctrl_node, id_ctrl_dof, self.base_cols, self.base_nodes, dref, flag3d=self.flag3d,
-                      direction=self.direction, filename=self.outputsDir / "Models")
+                      direction=self.direction, filename=self.outputsDir / "Models", site=self.tcl_filename[6:])
 
             spo.load_pattern(control_nodes, load_pattern=spo_pattern, heights=self.g.heights, mode_shape=mode_shape,
                              nbays_x=nbays_x, nbays_y=nbays_y)

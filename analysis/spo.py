@@ -7,7 +7,7 @@ import numpy as np
 
 class SPO:
     def __init__(self, cntr_node, disp_dir, base_cols, base_nodes, dref=1.0, nstep=1000, flag3d=False, direction=0,
-                 filename=""):
+                 filename="", site=""):
         """
         Initialize static pushover definition
         :param cntr_node: int                       Node to control with displacement integrator
@@ -32,8 +32,9 @@ class SPO:
         self.TEST_TYPE = 'NormDispIncr' if not self.flag3d else 'EnergyIncr'
         self.ALGORITHM_TYPE = 'KrylovNewton'
         self.NEGLIGIBLE = 1.e-09
-        self.recorder_name = filename / "spo_recorders.tcl"
-        self.filename = filename / "spo_analysis.tcl"
+        d = "x" if direction == 0 else "y"
+        self.recorder_name = filename / f"spo_recorders_{d}_{site}.tcl"
+        self.filename = filename / f"spo_analysis_{d}_{site}.tcl"
         self.file = None
 
     def load_pattern(self, nodes, load_pattern=2, heights=None, mode_shape=None, nbays_x=None, nbays_y=None):

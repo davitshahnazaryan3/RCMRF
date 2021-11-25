@@ -20,7 +20,6 @@ start_time = timeit.default_timer()
 # Directories
 input_dir = Path.cwd()
 materials_file = input_dir / "materials.csv"
-loads_file = input_dir / "action.csv"
 
 outputsDir = input_dir / "RCMRF"
 
@@ -31,6 +30,8 @@ elif site == "Ancona":
     seismicity = "medium"
 else:
     seismicity = "high"
+
+loads_file = input_dir / f"action_{site.lower()}.csv"
 
 section_file = outputsDir / f"hinge_models_{site}.pickle"
 # section_file = Path.cwd().parents[0] / "tests/hinge_temp.pickle"
@@ -44,7 +45,7 @@ gmfileNames = ["GMR_names1.txt", "GMR_names2.txt", "GMR_dts.txt", "GMR_durs.txt"
 # RCMRF inputs
 hingeModel = "hysteretic"
 system = "space"
-analysis_type = ["PO"]
+analysis_type = ["MA"]
 direction = 0
 flag3d = True
 export_at_each_step = True
