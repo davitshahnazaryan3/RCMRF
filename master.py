@@ -24,13 +24,14 @@ import json
 import pickle
 from analysis.ida_htf_3d import IDA_HTF_3D
 from client.modelToTCL import ModelToTCL
+from utils.utils import createFolder
 
 
 class Master:
     def __init__(self, sections_file, loads_file, materials_file, outputsDir, gmdir=None, gmfileNames=None, IM_type=2,
                  max_runs=15, analysis_time_step=.01, drift_capacity=10., analysis_type=None, system="Perimeter",
                  hinge_model="Hysteretic", flag3d=False, direction=0, export_at_each_step=False,
-                 period_assignment=None, periods_ida=None, tcl_filename=None):
+                 period_assignment=None, periods_ida=None, tcl_filename=None, export_model_to_tcl=False):
         """
         Initializes master file
         :param sections_file: str                   Name of file containing section data in '*.csv' format
@@ -54,8 +55,10 @@ class Master:
         :param flag3d: bool                         True for 3D modelling, False for 2D modelling
         :param direction: int                       Direction of analysis
         :param export_at_each_step: bool            Exporting at each step, i.e. record-run
-        :param period_assignment: dict              Period assigment IDs (for 3D only)
+        :param period_assignment: dict              Period assignment IDs (for 3D only)
         :param periods_ida: list                    Periods to use for IDA, optional, in case MA periods are not needed
+        :param tcl_filename: str                    TCL filename to export to
+        :param export_model_to_tcl: bool            Exporting to tcl? If True, tcl_filename must be provided
         """
         # TODO, add support for Haselton, currently only a placeholder, need to adapt for 3D etc.
         # list of strings for 3D modelling, and string for 2D modelling
@@ -79,6 +82,8 @@ class Master:
         self.direction = direction
         self.period_assignment = period_assignment
         self.periods_ida = periods_ida
+        self.tcl_filename = tcl_filename
+        self.export_model_to_tcl = export_model_to_tcl
         self.APPLY_GRAVITY_ELF = False
         self.FIRST_INT = .05
         self.INCR_STEP = .05
@@ -90,26 +95,11 @@ class Master:
         self.DTS_FILE = gmdir / gmfileNames[2]
         self.DURS_FILE = gmdir / gmfileNames[3]
 
-        self.tcl_filename = tcl_filename
-
         # Create an outputs directory if none exists
-        self.createFolder(outputsDir)
+        createFolder(outputsDir)
 
         if direction != 0 and flag3d and analysis_type == "MA":
             print("[WARNING] Direction should be set to 0 for Modal Analysis!")
-
-    @staticmethod
-    def createFolder(directory):
-        """
-        Checks whether provided directory exists, if no creates one
-        :param directory: str
-        :return: None
-        """
-        try:
-            if not os.path.exists(directory):
-                os.makedirs(directory)
-        except OSError:
-            print('Error: Creating directory. ' + directory)
 
     @staticmethod
     def wipe():
@@ -125,9 +115,15 @@ class Master:
         :param generate_model: bool                         Generate model or not
         :return: class                                      Object Model
         """
-        m = ModelToTCL(self.analysis_type, self.sections_file, self.loads_file, self.materials_file, self.outputsDir,
-                       self.system, hingeModel=self.hinge_model, flag3d=self.flag3d, direction=self.direction,
-                       tcl_filename=self.tcl_filename)
+        if self.export_model_to_tcl and self.tcl_filename:
+            m = ModelToTCL(self.analysis_type, self.sections_file, self.loads_file, self.materials_file,
+                           self.outputsDir, self.system, hingeModel=self.hinge_model, flag3d=self.flag3d,
+                           direction=self.direction, tcl_filename=self.tcl_filename)
+        else:
+            m = Model(self.analysis_type, self.sections_file, self.loads_file, self.materials_file,
+                      self.outputsDir, self.system, hingeModel=self.hinge_model, flag3d=self.flag3d,
+                      direction=self.direction)
+
         # Generate the model if specified
         if generate_model:
             m.model()
@@ -191,7 +187,7 @@ class Master:
 
         elif "TH" in self.analysis_type or "timehistory" in self.analysis_type or "IDA" in self.analysis_type:
             # Create a folder for NLTHA
-            self.createFolder(self.outputsDir / "NLTHA")
+            createFolder(self.outputsDir / "NLTHA")
 
             # Nonlinear time history analysis
             print("[INITIATE] IDA started")

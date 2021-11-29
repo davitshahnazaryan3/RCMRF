@@ -12,6 +12,7 @@ from client.recorders import Recorders
 from analysis.static import Static
 from analysis.modal import Modal
 from analysis.spo import SPO
+from utils.utils import *
 
 
 class ModelToTCL:
@@ -56,6 +57,8 @@ class ModelToTCL:
         :param system: str                          MRF type, i.e. Perimeter or space
         :param hingeModel: str                      Hinge model type (Haselton (4 nodes) or Hysteretic (2 nodes))
         :param flag3d: bool                         True for 3D modelling, False for 2D modelling
+        :param direction: int                       Direction of application, 0: x; 1: y
+        :param tcl_filename: str                    TCL filename to export model to
         """
         self.base_nodes = None
         self.base_cols = None
@@ -109,37 +112,15 @@ class ModelToTCL:
                 self.sections[col] = self.sections[col].astype(float)
 
         self.loads = pd.read_csv(loads_file)
-        self.check_integrity()
+        check_integrity(self.system, self.flag3d, self.hingeModel)
         self.g = Geometry(self.sections, self.hingeModel, flag3d=self.flag3d)
         self.NUM_MODES = 3
         self.DAMP_MODES = [1, 2]
         self.results = {}
 
+        # File to export model to
         self.file = None
         self.tcl_filename = tcl_filename
-
-    def createFolder(self, directory):
-        """
-        Checks whether provided directory exists, if no creates one
-        :param directory: str
-        :return: None
-        """
-        try:
-            if not os.path.exists(directory):
-                os.makedirs(directory)
-        except OSError:
-            print('Error: Creating directory. ' + directory)
-
-    def check_integrity(self):
-        """
-        Checks whether the input arguments have been supplied properly
-        :return: None
-        """
-        if self.system not in ('perimeter', 'space'):
-            raise ValueError('[EXCEPTION] Wrong system type provided, should be Perimeter or Space')
-        if self.flag3d and self.hingeModel == "haselton":
-            raise ValueError('[EXCEPTION] Currently 3D modelling with Haselton springs not supported!')
-        print('[SUCCESS] Integrity of input arguments checked')
 
     def create_model(self):
         """
@@ -639,6 +620,7 @@ class ModelToTCL:
             op.timeSeries('Linear', 1)
             op.pattern('Plain', 1, 1)
             self.file.write("\npattern Plain 1 Linear {")
+
             if self.hingeModel == 'haselton':
                 distributed = self.loads[(self.loads['Pattern'] == 'distributed')].reset_index(drop=True)
                 for idx in range(1, self.g.nst + 1):

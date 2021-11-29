@@ -6,17 +6,19 @@ import numpy as np
 
 
 class Modal:
-    def __init__(self, num_modes, path, damp_modes=None, damping=0.05):
+    def __init__(self, num_modes, path, damp_modes=None, damping=0.05, export_to_tcl=True):
         """
         Initializes modal analysis
         :param num_modes: int                   Number of modes of interest
         :param damp_modes: list(int)            2 element List of damping modes (e.g. [1, 3])
         :param damping: float                   Ratio of critical damping to be applied to the listed modes
+        :param export_to_tcl: bool              Exporting
         """
         self.num_modes = num_modes
         self.path = path
         self.damp_modes = damp_modes
         self.damping = damping
+        self.export_to_tcl = export_to_tcl
         self.lam = self.compute_eigenvectors()
         self.record_stuff()
         self.omega, self.freq, self.period = self.extract_eigenvalues(self.lam)
@@ -30,8 +32,6 @@ class Modal:
         Computes eigen values
         :return: float                          Eigenvalue
         """
-        self.file = open(self.path / "Models/modal_analysis.tcl", "w+")
-        self.file.write("# Modal analysis procedure")
 
         lam = None
         try:
@@ -52,27 +52,30 @@ class Modal:
                         print('[EXCEPTION] Eigensolver failed.')
 
         # Write to file
-        self.file.write("\n# Solve for lambda")
-        self.file.write(f"\nset lambda [eigen {self.num_modes}];")
+        if self.export_to_tcl:
+            self.file = open(self.path / "Models/modal_analysis.tcl", "w+")
+            self.file.write("# Modal analysis procedure")
+            self.file.write("\n# Solve for lambda")
+            self.file.write(f"\nset lambda [eigen {self.num_modes}];")
 
-        self.file.write("\n# If solver failed, try another")
-        self.file.write("\nif {[lindex $lambda 0] <= 0} {")
-        self.file.write(f"\n\tset lambda [eigen -genBandArpack  {self.num_modes}];")
-        self.file.write('\n\tputs "Eigensolver failed, trying genBandArpack...";\n}')
+            self.file.write("\n# If solver failed, try another")
+            self.file.write("\nif {[lindex $lambda 0] <= 0} {")
+            self.file.write(f"\n\tset lambda [eigen -genBandArpack  {self.num_modes}];")
+            self.file.write('\n\tputs "Eigensolver failed, trying genBandArpack...";\n}')
 
-        self.file.write("\nif {[lindex $lambda 0] <= 0} {")
-        self.file.write(f"\n\tset lambda [eigen -fullGenLapack  {self.num_modes}];")
-        self.file.write('\n\tputs "Eigensolver failed, trying fullGenLapack...";\n}')
+            self.file.write("\nif {[lindex $lambda 0] <= 0} {")
+            self.file.write(f"\n\tset lambda [eigen -fullGenLapack  {self.num_modes}];")
+            self.file.write('\n\tputs "Eigensolver failed, trying fullGenLapack...";\n}')
 
-        self.file.write("\nif {[lindex $lambda 0] <= 0} {")
-        self.file.write(f"\n\tset lambda [eigen -symmBandLapack  {self.num_modes}];")
-        self.file.write('\n\tputs "Eigensolver failed, trying symmBandLapack...";\n}')
+            self.file.write("\nif {[lindex $lambda 0] <= 0} {")
+            self.file.write(f"\n\tset lambda [eigen -symmBandLapack  {self.num_modes}];")
+            self.file.write('\n\tputs "Eigensolver failed, trying symmBandLapack...";\n}')
 
-        self.file.write("\nif {[lindex $lambda 0] <= 0} {")
-        self.file.write('\n\tputs "Eigensolver failed.";\n}')
+            self.file.write("\nif {[lindex $lambda 0] <= 0} {")
+            self.file.write('\n\tputs "Eigensolver failed.";\n}')
 
-        self.file.write("\n\n# Record the eigenvectors")
-        self.file.write("\nrecord")
+            self.file.write("\n\n# Record the eigenvectors")
+            self.file.write("\nrecord")
 
         return lam
 
@@ -99,17 +102,18 @@ class Modal:
             period.append(2 * np.pi / np.sqrt(lam[m]))
 
         # write to file
-        self.file.write("\n\n# Extract the eigenvalues to the appropriate arrays")
-        self.file.write("\nset omega {};")
-        self.file.write("\nset freq {};")
-        self.file.write("\nset periods {};")
+        if self.export_to_tcl:
+            self.file.write("\n\n# Extract the eigenvalues to the appropriate arrays")
+            self.file.write("\nset omega {};")
+            self.file.write("\nset freq {};")
+            self.file.write("\nset periods {};")
 
-        self.file.write("\nforeach lam $lambda {")
-        self.file.write("\n\tlappend omega [expr sqrt($lam)]")
-        self.file.write("\n\tlappend freq [expr sqrt($lam)/(2*3.14159)]")
-        self.file.write("\n\tlappend periods [expr (2*3.14159)/sqrt($lam)]\n};")
+            self.file.write("\nforeach lam $lambda {")
+            self.file.write("\n\tlappend omega [expr sqrt($lam)]")
+            self.file.write("\n\tlappend freq [expr sqrt($lam)/(2*3.14159)]")
+            self.file.write("\n\tlappend periods [expr (2*3.14159)/sqrt($lam)]\n};")
 
-        self.file.close()
+            self.file.close()
 
         return omega, freq, period
 

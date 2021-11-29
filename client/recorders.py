@@ -74,6 +74,7 @@ class Recorders:
         Records modal shapes
         :param num_modes: int                       Number of modal shapes to record
         :param lam: list                            Eigenvectors
+        :param path: str                            Path to export Modal_analysis.tcl to
         :return: dict                               Dictionary containing modal shape information
         """
         if self.flag3d:
@@ -145,19 +146,7 @@ class Recorders:
 
             results = {"Mode1": [], "Mode2": []}
 
-            file = open(path / "Models/modal_recorders.tcl", "w+")
-            file.write("# Extracting first two modal shapes")
-            # file.write("\nset mode1 {};")
-            # file.write("\nset mode2 {};")
-
-            nstart = int(f"{self.geometry.nbays[0] + 1}{self.geometry.nbays[1] + 1}{1}")
-            nend = int(f"{self.geometry.nbays[0] + 1}{self.geometry.nbays[1] + 1}{self.geometry.nst}")
-
-            file.write('\nrecorder Node -file mode1.txt -nodeRange ' +
-                       f'{nstart} {nend} -dof {int(positions[0] + 1)} "eigen 1";')
-            file.write('\nrecorder Node -file mode2.txt -nodeRange ' +
-                       f'{nstart} {nend} -dof {int(positions[1] + 1)} "eigen 2";')
-
+            # Initialize modal shape
             modalShape = np.zeros((self.geometry.nst, 2))
             for st in range(self.geometry.nst):
                 nodetag = int(f"{self.geometry.nbays[0] + 1}{self.geometry.nbays[1] + 1}{st + 1}")
@@ -173,8 +162,8 @@ class Recorders:
                 # Second mode shape
                 modalShape[st, 1] = op.nodeEigenvector(nodetag, 2, int(positions[1] + 1))
 
-            # Normalize the modal shapes (first two modes, most likely associated with X and Y directions unless there are
-            # large torsional effects)
+            # Normalize the modal shapes (first two modes, most likely associated with X and Y directions unless
+            # there are large torsional effects)
             modalShape = np.abs(modalShape) / np.max(np.abs(modalShape), axis=0)
 
             # Calculate the first mode participation factor and effective modal mass
@@ -202,9 +191,20 @@ class Recorders:
             gamma = np.array([gamma[i] for i in range(len(positions))])
             mstar = np.array([mstar[i] for i in range(len(positions))])
 
-            file.close()
+            if path:
+                file = open(path / "Models/modal_recorders.tcl", "w+")
+                file.write("# Extracting first two modal shapes")
+                # file.write("\nset mode1 {};")
+                # file.write("\nset mode2 {};")
 
-            print(period, gamma, mstar)
+                nstart = int(f"{self.geometry.nbays[0] + 1}{self.geometry.nbays[1] + 1}{1}")
+                nend = int(f"{self.geometry.nbays[0] + 1}{self.geometry.nbays[1] + 1}{self.geometry.nst}")
+
+                file.write('\nrecorder Node -file mode1.txt -nodeRange ' +
+                           f'{nstart} {nend} -dof {int(positions[0] + 1)} "eigen 1";')
+                file.write('\nrecorder Node -file mode2.txt -nodeRange ' +
+                           f'{nstart} {nend} -dof {int(positions[1] + 1)} "eigen 2";')
+                file.close()
 
         else:
             results = {}

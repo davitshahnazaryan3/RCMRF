@@ -6,7 +6,7 @@ import numpy as np
 
 
 class SPO:
-    def __init__(self, cntr_node, disp_dir, base_cols, base_nodes, dref=1.0, nstep=1000, flag3d=False, direction=0,
+    def __init__(self, cntr_node, disp_dir, base_cols, base_nodes=None, dref=1.0, nstep=1000, flag3d=False, direction=0,
                  filename="", site=""):
         """
         Initialize static pushover definition
@@ -33,9 +33,13 @@ class SPO:
         self.ALGORITHM_TYPE = 'KrylovNewton'
         self.NEGLIGIBLE = 1.e-09
         d = "x" if direction == 0 else "y"
-        self.recorder_name = filename / f"spo_recorders_{d}_{site}.tcl"
-        self.filename = filename / f"spo_analysis_{d}_{site}.tcl"
-        self.file = None
+
+        if filename and site:
+            self.recorder_name = filename / f"spo_recorders_{d}_{site}.tcl"
+            self.filename = filename / f"spo_analysis_{d}_{site}.tcl"
+            self.file = None
+        else:
+            self.filename = None
 
     def load_pattern(self, nodes, load_pattern=2, heights=None, mode_shape=None, nbays_x=None, nbays_y=None):
         """
@@ -72,10 +76,11 @@ class SPO:
             raise ValueError('[EXCEPTION] Wrong load pattern is supplied.')
 
         # Writing to file
-        self.file = open(self.filename, "w+")
-        self.file.write("# Static pushover analysis")
-        self.file.write("\n\n# Define load shape")
-        self.file.write("\npattern Plain 4 Linear {")
+        if self.filename:
+            self.file = open(self.filename, "w+")
+            self.file.write("# Static pushover analysis")
+            self.file.write("\n\n# Define load shape")
+            self.file.write("\npattern Plain 4 Linear {")
 
         op.timeSeries('Linear', 4)
         op.pattern('Plain', 400, 4)
@@ -94,13 +99,17 @@ class SPO:
                         if self.direction == 0:
                             op.load(nodepush, fpush, self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE,
                                     self.NEGLIGIBLE, self.NEGLIGIBLE)
-                            self.file.write(f"\n\tload {nodepush} {fpush} {self.NEGLIGIBLE} {self.NEGLIGIBLE}"
-                                            f" {self.NEGLIGIBLE} {self.NEGLIGIBLE} {self.NEGLIGIBLE};")
+
+                            if self.filename:
+                                self.file.write(f"\n\tload {nodepush} {fpush} {self.NEGLIGIBLE} {self.NEGLIGIBLE}"
+                                                f" {self.NEGLIGIBLE} {self.NEGLIGIBLE} {self.NEGLIGIBLE};")
                         else:
                             op.load(nodepush, self.NEGLIGIBLE, fpush, self.NEGLIGIBLE, self.NEGLIGIBLE,
                                     self.NEGLIGIBLE, self.NEGLIGIBLE)
-                            self.file.write(f"\n\tload {nodepush} {self.NEGLIGIBLE} {fpush} {self.NEGLIGIBLE}"
-                                            f" {self.NEGLIGIBLE} {self.NEGLIGIBLE} {self.NEGLIGIBLE};")
+
+                            if self.filename:
+                                self.file.write(f"\n\tload {nodepush} {self.NEGLIGIBLE} {fpush} {self.NEGLIGIBLE}"
+                                                f" {self.NEGLIGIBLE} {self.NEGLIGIBLE} {self.NEGLIGIBLE};")
 
         else:
             for fpush, nodepush in zip(loads, nodes):
@@ -110,7 +119,8 @@ class SPO:
                 else:
                     op.load(nodepush, fpush, self.NEGLIGIBLE, self.NEGLIGIBLE)
 
-        self.file.write("\n};")
+        if self.filename:
+            self.file.write("\n};")
 
     def set_analysis(self, heights):
         """
@@ -119,7 +129,6 @@ class SPO:
         :return: None
         """
         print('[INITIALIZE] Static pushover analysis has commenced...')
-        self.file.write("\n\n# Static pushover analysis commences...")
 
         if self.flag3d:
             op.constraints("Penalty", 1e15, 1e15)
@@ -133,14 +142,16 @@ class SPO:
         op.integrator('DisplacementControl', self.cntr_node, self.disp_dir, 0.1 * heights[-1] / self.nstep)
         op.analysis('Static')
 
-        self.file.write("\nconstraints Penalty 1.e15 1.e15;")
-        self.file.write("\nnumberer RCM;")
-        self.file.write("\nsystem UmfPack;")
-        self.file.write(f"\ntest {self.TEST_TYPE} {self.TOL} {self.ITERINIT};")
-        self.file.write(f"\nalgorithm {self.ALGORITHM_TYPE};")
-        self.file.write(f"\nintegrator DisplacementControl {self.cntr_node} {self.disp_dir} "
-                        f"{0.1 * heights[-1] / self.nstep};")
-        self.file.write("\nanalysis Static;")
+        if self.filename:
+            self.file.write("\n\n# Static pushover analysis commences...")
+            self.file.write("\nconstraints Penalty 1.e15 1.e15;")
+            self.file.write("\nnumberer RCM;")
+            self.file.write("\nsystem UmfPack;")
+            self.file.write(f"\ntest {self.TEST_TYPE} {self.TOL} {self.ITERINIT};")
+            self.file.write(f"\nalgorithm {self.ALGORITHM_TYPE};")
+            self.file.write(f"\nintegrator DisplacementControl {self.cntr_node} {self.disp_dir} "
+                            f"{0.1 * heights[-1] / self.nstep};")
+            self.file.write("\nanalysis Static;")
 
     def spo_recorders(self):
         file = open(self.recorder_name, "w+")
@@ -155,7 +166,8 @@ class SPO:
         Searches for a solution by using different test conditions or algorithms
         :return: ndarrays                           Top displacement vs Base shear
         """
-        self.spo_recorders()
+        if self.filename:
+            self.spo_recorders()
 
         # It happens so, that column shear ID matches the disp_dir ID, they are not the same thing
         col_shear_idx = self.disp_dir
@@ -232,63 +244,65 @@ class SPO:
             print(f"[FAILURE] Stopped because of load factor below zero: {loadf}")
 
         # Write to file
-        self.file.write("\n\nset ok 0;")
-        self.file.write("\nset step 1;")
-        self.file.write("\nset loadf 1.0;")
-        self.file.write(f"\nset nSteps {self.nstep};")
 
-        self.file.write("\n\n# The process...")
-        self.file.write("\nwhile {$step<=$nSteps && $ok==0 && $loadf>0} {")
-        self.file.write("\n\tset ok [analyze 1];")
-        self.file.write("\n\tset loadf [getTime];")
+        if self.filename:
+            self.file.write("\n\nset ok 0;")
+            self.file.write("\nset step 1;")
+            self.file.write("\nset loadf 1.0;")
+            self.file.write(f"\nset nSteps {self.nstep};")
 
-        self.file.write("\n\n\t# If the analysis fails, try the following changes to achieve convergence")
-        self.file.write("\n\t# Analysis will be slower in here though...")
-        self.file.write("\n\tif {$ok != 0} {")
-        self.file.write('\n\t\tputs "Trying relaxed convergence..."')
-        self.file.write(f'\n\t\ttest {self.TEST_TYPE} {self.TOL * 0.01} {int(self.ITERINIT * 50)}')
-        self.file.write('\n\t\tset ok [analyze 1]')
-        self.file.write(f'\n\t\ttest {self.TEST_TYPE} {self.TOL} {self.ITERINIT}\n\t' + "}")
+            self.file.write("\n\n# The process...")
+            self.file.write("\nwhile {$step<=$nSteps && $ok==0 && $loadf>0} {")
+            self.file.write("\n\tset ok [analyze 1];")
+            self.file.write("\n\tset loadf [getTime];")
 
-        self.file.write("\n\tif {$ok != 0} {")
-        self.file.write('\n\t\tputs "Trying Newton with initial then current..."')
-        self.file.write(f'\n\t\ttest {self.TEST_TYPE} {self.TOL * 0.01} {int(self.ITERINIT * 50)}')
-        self.file.write('\n\t\talgorithm Newton -initialThenCurrent')
-        self.file.write('\n\t\tset ok [analyze 1]')
-        self.file.write(f'\n\t\talgorithm {self.ALGORITHM_TYPE}')
-        self.file.write(f'\n\t\ttest {self.TEST_TYPE} {self.TOL} {self.ITERINIT}\n\t' + "}")
+            self.file.write("\n\n\t# If the analysis fails, try the following changes to achieve convergence")
+            self.file.write("\n\t# Analysis will be slower in here though...")
+            self.file.write("\n\tif {$ok != 0} {")
+            self.file.write('\n\t\tputs "Trying relaxed convergence..."')
+            self.file.write(f'\n\t\ttest {self.TEST_TYPE} {self.TOL * 0.01} {int(self.ITERINIT * 50)}')
+            self.file.write('\n\t\tset ok [analyze 1]')
+            self.file.write(f'\n\t\ttest {self.TEST_TYPE} {self.TOL} {self.ITERINIT}\n\t' + "}")
 
-        self.file.write("\n\tif {$ok != 0} {")
-        self.file.write('\n\t\tputs "Trying ModifiedNewton with initial..."')
-        self.file.write(f'\n\t\ttest {self.TEST_TYPE} {self.TOL * 0.01} {int(self.ITERINIT * 50)}')
-        self.file.write('\n\t\talgorithm ModifiedNewton -initial')
-        self.file.write('\n\t\tset ok [analyze 1]')
-        self.file.write(f'\n\t\talgorithm {self.ALGORITHM_TYPE}')
-        self.file.write(f'\n\t\ttest {self.TEST_TYPE} {self.TOL} {self.ITERINIT}\n\t' + "}")
+            self.file.write("\n\tif {$ok != 0} {")
+            self.file.write('\n\t\tputs "Trying Newton with initial then current..."')
+            self.file.write(f'\n\t\ttest {self.TEST_TYPE} {self.TOL * 0.01} {int(self.ITERINIT * 50)}')
+            self.file.write('\n\t\talgorithm Newton -initialThenCurrent')
+            self.file.write('\n\t\tset ok [analyze 1]')
+            self.file.write(f'\n\t\talgorithm {self.ALGORITHM_TYPE}')
+            self.file.write(f'\n\t\ttest {self.TEST_TYPE} {self.TOL} {self.ITERINIT}\n\t' + "}")
 
-        self.file.write("\n\tif {$ok != 0} {")
-        self.file.write('\n\t\tputs "Trying KrylovNewton..."')
-        self.file.write(f'\n\t\ttest {self.TEST_TYPE} {self.TOL * 0.01} {int(self.ITERINIT * 50)}')
-        self.file.write('\n\t\talgorithm KrylovNewton')
-        self.file.write('\n\t\tset ok [analyze 1]')
-        self.file.write(f'\n\t\talgorithm {self.ALGORITHM_TYPE}')
-        self.file.write(f'\n\t\ttest {self.TEST_TYPE} {self.TOL} {self.ITERINIT}\n\t' + "}")
+            self.file.write("\n\tif {$ok != 0} {")
+            self.file.write('\n\t\tputs "Trying ModifiedNewton with initial..."')
+            self.file.write(f'\n\t\ttest {self.TEST_TYPE} {self.TOL * 0.01} {int(self.ITERINIT * 50)}')
+            self.file.write('\n\t\talgorithm ModifiedNewton -initial')
+            self.file.write('\n\t\tset ok [analyze 1]')
+            self.file.write(f'\n\t\talgorithm {self.ALGORITHM_TYPE}')
+            self.file.write(f'\n\t\ttest {self.TEST_TYPE} {self.TOL} {self.ITERINIT}\n\t' + "}")
 
-        self.file.write("\n\tif {$ok != 0} {")
-        self.file.write('\n\t\tputs "Perform a Hail Mary..."')
-        self.file.write(f'\n\t\ttest FixedNumIter {int(self.ITERINIT)}')
-        self.file.write('\n\t\tset ok [analyze 1]\n\t}')
+            self.file.write("\n\tif {$ok != 0} {")
+            self.file.write('\n\t\tputs "Trying KrylovNewton..."')
+            self.file.write(f'\n\t\ttest {self.TEST_TYPE} {self.TOL * 0.01} {int(self.ITERINIT * 50)}')
+            self.file.write('\n\t\talgorithm KrylovNewton')
+            self.file.write('\n\t\tset ok [analyze 1]')
+            self.file.write(f'\n\t\talgorithm {self.ALGORITHM_TYPE}')
+            self.file.write(f'\n\t\ttest {self.TEST_TYPE} {self.TOL} {self.ITERINIT}\n\t' + "}")
 
-        self.file.write("\n\tset loadf [getTime];")
-        self.file.write("\n\tincr step 1;")
-        self.file.write("\n};")
+            self.file.write("\n\tif {$ok != 0} {")
+            self.file.write('\n\t\tputs "Perform a Hail Mary..."')
+            self.file.write(f'\n\t\ttest FixedNumIter {int(self.ITERINIT)}')
+            self.file.write('\n\t\tset ok [analyze 1]\n\t}')
 
-        self.file.write("\n\nif {$ok != 0} {")
-        self.file.write('\n\tputs "DispControl Analysis FAILED"')
-        self.file.write("\n} else {")
-        self.file.write('\n\tputs "DispControl Analysis SUCCESSFUL"\n}')
+            self.file.write("\n\tset loadf [getTime];")
+            self.file.write("\n\tincr step 1;")
+            self.file.write("\n};")
 
-        self.file.write('\nif {$loadf <= 0} {')
-        self.file.write('\n\tputs "Stopped because of load factor below zero: $loadf"\n}')
+            self.file.write("\n\nif {$ok != 0} {")
+            self.file.write('\n\tputs "DispControl Analysis FAILED"')
+            self.file.write("\n} else {")
+            self.file.write('\n\tputs "DispControl Analysis SUCCESSFUL"\n}')
+
+            self.file.write('\nif {$loadf <= 0} {')
+            self.file.write('\n\tputs "Stopped because of load factor below zero: $loadf"\n}')
 
         return topDisp, baseShear

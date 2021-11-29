@@ -12,11 +12,12 @@ from client.recorders import Recorders
 from analysis.static import Static
 from analysis.modal import Modal
 from analysis.spo import SPO
+from utils.utils import *
 
 
 class Model:
     def __init__(self, analysis_type, sections_file, loads_file, materials, outputsDir, system='perimeter',
-                 hingeModel='haselton', flag3d=False, direction=0, tcl_filename=None):
+                 hingeModel='haselton', flag3d=False, direction=0):
         """
         Initializes OpenSees model creator
         :param analysis_type: list(str)             Type of analysis for which we are recording [TH, PO, ST, MA, ELF]
@@ -56,6 +57,7 @@ class Model:
         :param system: str                          MRF type, i.e. Perimeter or space
         :param hingeModel: str                      Hinge model type (Haselton (4 nodes) or Hysteretic (2 nodes))
         :param flag3d: bool                         True for 3D modelling, False for 2D modelling
+        :param direction: int                       Direction of application, 0: x; 1: y
         """
         self.base_nodes = None
         self.base_cols = None
@@ -109,37 +111,11 @@ class Model:
                 self.sections[col] = self.sections[col].astype(float)
 
         self.loads = pd.read_csv(loads_file)
-        self.check_integrity()
+        check_integrity(self.system, self.flag3d, self.hingeModel)
         self.g = Geometry(self.sections, self.hingeModel, flag3d=self.flag3d)
         self.NUM_MODES = 3
         self.DAMP_MODES = [1, 2]
         self.results = {}
-
-        self.file = None
-        self.tcl_filename = tcl_filename
-
-    def createFolder(self, directory):
-        """
-        Checks whether provided directory exists, if no creates one
-        :param directory: str
-        :return: None
-        """
-        try:
-            if not os.path.exists(directory):
-                os.makedirs(directory)
-        except OSError:
-            print('Error: Creating directory. ' + directory)
-
-    def check_integrity(self):
-        """
-        Checks whether the input arguments have been supplied properly
-        :return: None
-        """
-        if self.system not in ('perimeter', 'space'):
-            raise ValueError('[EXCEPTION] Wrong system type provided, should be Perimeter or Space')
-        if self.flag3d and self.hingeModel == "haselton":
-            raise ValueError('[EXCEPTION] Currently 3D modelling with Haselton springs not supported!')
-        print('[SUCCESS] Integrity of input arguments checked')
 
     def create_model(self):
         """
@@ -176,6 +152,7 @@ class Model:
 
         # Get dataframe containing all nodes of the building / frame
         df = self.g.define_nodes()
+
         # Initialization of base nodes and hinges
         base_nodes = []
         hinge_nodes = []
@@ -237,14 +214,21 @@ class Model:
         """
         if any((tag not in ('PDelta', 'Linear', 'Corotational') for tag in (col_transf_type, beam_transf_tag))):
             raise Exception('[EXCEPTION] Wrong transformation type provided')
+
         else:
             if self.flag3d:
-                op.geomTransf(col_transf_type, self.COL_TRANSF_TAG, 0, 1, 0)
-                op.geomTransf(beam_transf_tag, self.BEAM_X_TRANSF_TAG, 0, 1, 0)
-                op.geomTransf(beam_transf_tag, self.BEAM_Y_TRANSF_TAG, -1, 0, 0)
+                # TODO add logic for precise estimation of offsets
+                op.geomTransf(col_transf_type, self.COL_TRANSF_TAG, 0., -1., 0.,
+                              "-jntOffset", 0.0, 0.0, 0.3, 0.0, 0.0, -0.3)
+                op.geomTransf(beam_transf_tag, self.BEAM_X_TRANSF_TAG, 0., -1., 0.,
+                              "-jntOffset", 0.2, 0.0, 0.0, -0.2, 0.0, 0.0)
+                op.geomTransf(beam_transf_tag, self.BEAM_Y_TRANSF_TAG, 1., 0., 0.,
+                              "-jntOffset", 0.0, 0.2, 0.0, 0.0, -0.2, 0.0)
+
             else:
                 op.geomTransf(col_transf_type, self.COL_TRANSF_TAG)
                 op.geomTransf(beam_transf_tag, self.BEAM_X_TRANSF_TAG)
+
         print('[SUCCESS] Material Properties have been defined')
 
     def joint_materials(self):
@@ -535,7 +519,7 @@ class Model:
                         # Mass based on tributary area
                         q = self.loads[(self.loads["Pattern"] == "q") & (self.loads["Storey"] == st)]["Load"].iloc[0]
                         mass = area * q / 9.81
-                        op.mass(nodetag, mass, mass, self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
+                        op.mass(nodetag, mass, mass, mass, self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
 
         else:
             masses = self.loads[(self.loads['Pattern'] == 'mass')].reset_index(drop=True)
@@ -569,7 +553,7 @@ class Model:
 
         elif analysis == 'MA' or analysis == 'modal':
             lam = kwargs.get('lam', None)
-            results = r.ma_recorder(num_modes, lam)
+            results = r.ma_recorder(num_modes, lam, None)
 
         elif analysis == 'ELF' or analysis == 'ELFM':
             results = r.st_recorder(base_nodes)
@@ -597,6 +581,7 @@ class Model:
         if apply_loads:
             op.timeSeries('Linear', 1)
             op.pattern('Plain', 1, 1)
+
             if self.hingeModel == 'haselton':
                 distributed = self.loads[(self.loads['Pattern'] == 'distributed')].reset_index(drop=True)
                 for idx in range(1, self.g.nst + 1):
@@ -644,7 +629,7 @@ class Model:
                                     op.load(nodej, self.NEGLIGIBLE, self.NEGLIGIBLE, -load * spans_x[xbay - 1] / 2,
                                             self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
                                 else:
-                                    op.eleLoad('-ele', beam, '-type', '-beamUniform', +load, self.NEGLIGIBLE)
+                                    op.eleLoad('-ele', beam, '-type', '-beamUniform', -load, self.NEGLIGIBLE)
 
                                 # Additional load for interior beams
                                 if 1 < ybay < len(spans_y) + 1:
@@ -666,7 +651,7 @@ class Model:
                                                 -load * spans_x[xbay - 1] / 2,
                                                 self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
                                     else:
-                                        op.eleLoad('-ele', beam, '-type', '-beamUniform', +load, self.NEGLIGIBLE)
+                                        op.eleLoad('-ele', beam, '-type', '-beamUniform', -load, self.NEGLIGIBLE)
 
                             else:
                                 # Beams along Y direction
@@ -692,7 +677,7 @@ class Model:
                                     op.load(nodej, self.NEGLIGIBLE, self.NEGLIGIBLE, -load * spans_y[ybay - 1] / 2,
                                             self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
                                 else:
-                                    op.eleLoad('-ele', beam, '-type', '-beamUniform', +load, self.NEGLIGIBLE)
+                                    op.eleLoad('-ele', beam, '-type', '-beamUniform', -load, self.NEGLIGIBLE)
 
                                 # Additional load for interior beams
                                 if 1 < xbay < len(spans_x) + 1:
@@ -714,7 +699,7 @@ class Model:
                                                 -load * spans_y[ybay - 1] / 2,
                                                 self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
                                     else:
-                                        op.eleLoad('-ele', beam, '-type', '-beamUniform', +load, self.NEGLIGIBLE)
+                                        op.eleLoad('-ele', beam, '-type', '-beamUniform', -load, self.NEGLIGIBLE)
 
                     else:
                         distributed = self.loads[(self.loads['Pattern'] == 'distributed')].reset_index(drop=True)
@@ -776,14 +761,14 @@ class Model:
                         op.load(int(f"{self.g.nbays + 1}{st + 1}"), load, self.NEGLIGIBLE, self.NEGLIGIBLE)
 
             s = Static()
-            s.static_analysis(self.flag3d)
+            s.static_analysis(None, self.flag3d)
             self.results['ELF'] = self.set_recorders('ELF', base_nodes=self.base_nodes)
             print('[SUCCESS] ELF done')
 
         if 'ST' in self.analysis_type or 'static' in self.analysis_type or 'gravity' in self.analysis_type:
             print('[STEP] Gravity static analysis started')
             s = Static()
-            s.static_analysis(self.flag3d)
+            s.static_analysis(None, self.flag3d)
             self.results['Gravity'] = self.set_recorders('ST', base_nodes=self.base_nodes)
 
             filepath = self.outputsDir / 'ST'
@@ -815,6 +800,7 @@ class Model:
             filepath = self.outputsDir / 'MA'
             with open(f"{filepath}.json", 'w') as (f):
                 json.dump(self.results['Modal'], f)
+
             print('[SUCCESS] Modal analysis done')
             mode_shape = self.results['Modal']['Mode1']
 
@@ -852,7 +838,7 @@ class Model:
 
             # Call the SPO object
             spo = SPO(id_ctrl_node, id_ctrl_dof, self.base_cols, dref=dref, flag3d=self.flag3d,
-                      direction=self.direction)
+                      direction=self.direction, filename=None, site=None)
 
             spo.load_pattern(control_nodes, load_pattern=spo_pattern, heights=self.g.heights, mode_shape=mode_shape,
                              nbays_x=nbays_x, nbays_y=nbays_y)
@@ -919,7 +905,7 @@ class Model:
                         # Base columns
                         if st == 1:
                             base_cols.append(et)
-                        s.hysteretic_hinges(et, inode, jnode, eleHinge, transfTag, self.flag3d)
+                        s.hysteretic_hinges(et, inode, jnode, eleHinge, transfTag, self.flag3d, None)
 
             # Add beam elements in X direction
             for ybay in range(1, int(nbays_y + 2)):
@@ -943,7 +929,7 @@ class Model:
                             eleHinge = hinge_gr[(hinge_gr["Element"] == "Beam") & (hinge_gr["Storey"] == st)
                                                 & (hinge_gr["Direction"] == 0)].reset_index(drop=True).iloc[0]
                             elements["Beams"]["gravity_x"].append(et)
-                        s.hysteretic_hinges(et, inode, jnode, eleHinge, transfTag, self.flag3d)
+                        s.hysteretic_hinges(et, inode, jnode, eleHinge, transfTag, self.flag3d, None)
 
             # Add beam elements in Y direction
             for xbay in range(1, int(nbays_x + 2)):
@@ -966,7 +952,7 @@ class Model:
                             eleHinge = hinge_gr[(hinge_gr["Element"] == "Beam") & (hinge_gr["Storey"] == st)
                                                 & (hinge_gr["Direction"] == 1)].reset_index(drop=True).iloc[0]
                             elements["Beams"]["gravity_y"].append(et)
-                        s.hysteretic_hinges(et, inode, jnode, eleHinge, transfTag, self.flag3d)
+                        s.hysteretic_hinges(et, inode, jnode, eleHinge, transfTag, self.flag3d, None)
 
         else:
             # Initialize elements
@@ -987,7 +973,7 @@ class Model:
                     if ele['Storey'] == 1:
                         base_cols.append(et)
 
-                s.hysteretic_hinges(et, None, None, ele, transfTag, self.flag3d)
+                s.hysteretic_hinges(et, None, None, ele, transfTag, self.flag3d, None)
 
         return elements, base_cols
 
