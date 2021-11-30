@@ -1,17 +1,18 @@
 """
 Model creator of an RC MRF. Lumped hinge models following the recommendations of Haselton 2007 are used.
 """
-import os
+import json
+import pickle
+
 import openseespy.opensees as op
 import pandas as pd
-import json, pickle
-import numpy as np
-from client.geometry import Geometry
-from client.sections import Sections
-from client.recorders import Recorders
-from analysis.static import Static
+
 from analysis.modal import Modal
 from analysis.spo import SPO
+from analysis.static import Static
+from client.geometry import Geometry
+from client.recorders import Recorders
+from client.sections import Sections
 from utils.utils import *
 
 

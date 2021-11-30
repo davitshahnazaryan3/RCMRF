@@ -15,6 +15,8 @@ Hinge model information in secondary direction (not necessary for 2D)
 Hinge model information for gravity frame elements (not necessary for 2D)
 """
 import openseespy.opensees as op
+
+from analysis.multiStripeAnalysis import get_records
 from client.model import Model
 from analysis.static import Static
 from pathlib import Path
@@ -24,10 +26,10 @@ import json
 import pickle
 from analysis.ida_htf_3d import IDA_HTF_3D
 from client.modelToTCL import ModelToTCL
-from utils.utils import createFolder
+from utils.utils import createFolder, get_time, get_start_time
 
 
-class Master:
+class Main:
     def __init__(self, sections_file, loads_file, materials_file, outputsDir, gmdir=None, gmfileNames=None, IM_type=2,
                  max_runs=15, analysis_time_step=.01, drift_capacity=10., analysis_type=None, system="Perimeter",
                  hinge_model="Hysteretic", flag3d=False, direction=0, export_at_each_step=False,
@@ -95,6 +97,9 @@ class Master:
         self.DTS_FILE = gmdir / gmfileNames[2]
         self.DURS_FILE = gmdir / gmfileNames[3]
 
+        # Records for MSA
+        self.records = None
+
         # Create an outputs directory if none exists
         createFolder(outputsDir)
 
@@ -134,6 +139,27 @@ class Master:
                 s.static_analysis(self.outputsDir, self.flag3d)
 
         return m
+
+    def get_modal_parameters(self):
+        try:
+            if self.periods_ida is None:
+                with open(self.outputsDir / "MA.json") as f:
+                    results = json.load(f)
+                if self.flag3d:
+                    period = [results["Periods"][self.period_assignment["x"]],
+                              results["Periods"][self.period_assignment["y"]]]
+                else:
+                    period = results["Periods"][0]
+                damping = results["Damping"][0]
+                omegas = results["CircFreq"]
+            else:
+                period = self.periods_ida
+                damping = 0.05
+                omegas = 2 * np.pi / (np.array(period))
+
+        except:
+            raise ValueError("[EXCEPTION] Modal analysis data does not exist.")
+        return period, damping, omegas
 
     def run_model(self):
         """
@@ -191,24 +217,9 @@ class Master:
 
             # Nonlinear time history analysis
             print("[INITIATE] IDA started")
-            try:
-                if self.periods_ida is None:
-                    with open(self.outputsDir / "MA.json") as f:
-                        results = json.load(f)
-                    if self.flag3d:
-                        period = [results["Periods"][self.period_assignment["x"]],
-                                  results["Periods"][self.period_assignment["y"]]]
-                    else:
-                        period = results["Periods"][0]
-                    damping = results["Damping"][0]
-                    omegas = results["CircFreq"]
-                else:
-                    period = self.periods_ida
-                    damping = 0.05
-                    omegas = 2 * np.pi / (np.array(period))
 
-            except:
-                raise ValueError("[EXCEPTION] Modal analysis data does not exist.")
+            # Get MA parameters
+            period, damping, omegas = self.get_modal_parameters()
 
             # Initialize
             ida = IDA_HTF_3D(self.FIRST_INT, self.INCR_STEP, self.max_runs, self.IM_type, period, damping, omegas,
@@ -232,6 +243,18 @@ class Master:
 
             print("[SUCCESS] IDA done")
 
+        elif "MSA" in self.analysis_type:
+            # TODO, currently supports space and 3D with hysteretic modelling
+
+            # Create a folder for NLTHA
+            createFolder(self.outputsDir / "MSA")
+
+            # Nonlinear time history analysis
+            print("[INITIATE] MSA started")
+
+            # The Set-up
+            self.records = get_records(self.gmdir, output_dir=self.outputsDir / "MSA")
+
         else:
             # Runs static or modal analysis (ST or MA)
             m = self.call_model()
@@ -240,20 +263,8 @@ class Master:
 
 
 if __name__ == "__main__":
-    def truncate(n, decimals=0):
-        multiplier = 10 ** decimals
-        return int(n * multiplier) / multiplier
 
-
-    def get_time(start_time):
-        elapsed = timeit.default_timer() - start_time
-        print('Running time: ', truncate(elapsed, 2), ' seconds')
-        print('Running time: ', truncate(elapsed / float(60), 2), ' minutes')
-
-
-    import timeit
-
-    start_time = timeit.default_timer()
+    start_time = get_start_time()
 
     # Directories
     directory_x = Path.cwd().parents[0] / ".applications/LOSS Validation Manuscript/Case21/Cache/framex"
@@ -289,10 +300,10 @@ if __name__ == "__main__":
     period_assignment = {"x": 0, "y": 1}
     periods = [0.72, 0.62]
     # Let's go...
-    m = Master(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
-               analysis_type=analysis_type, system="Perimeter", hinge_model=hingeModel, flag3d=flag3d,
-               direction=direction, export_at_each_step=export_at_each_step, period_assignment=period_assignment,
-               periods_ida=periods, max_runs=15, tcl_filename="low")
+    m = Main(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
+             analysis_type=analysis_type, system="Perimeter", hinge_model=hingeModel, flag3d=flag3d,
+             direction=direction, export_at_each_step=export_at_each_step, period_assignment=period_assignment,
+             periods_ida=periods, max_runs=15, tcl_filename="low")
 
     m.wipe()
     m.run_model()

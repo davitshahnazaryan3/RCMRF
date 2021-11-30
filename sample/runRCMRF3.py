@@ -1,5 +1,5 @@
 from pathlib import Path
-from master import Master
+from main import Main
 import timeit
 import pickle
 from visualize.get_rendering import *
@@ -27,10 +27,10 @@ export_model_to_tcl = False
 
 outputsDir = input_dir / "RCMRF"
 
-site = "Medium"
+site = "Ancona"
 if site == "Milano":
     seismicity = "low"
-elif site == "Medium":
+elif site == "Ancona":
     seismicity = "medium"
 else:
     seismicity = "high"
@@ -55,11 +55,11 @@ flag3d = True
 export_at_each_step = True
 period_assignment = {"x": 1, "y": 0}
 periods = [0.95, 0.90]
-m = Master(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
-           analysis_type=analysis_type, system=system, hinge_model=hingeModel, flag3d=flag3d,
-           direction=direction, export_at_each_step=export_at_each_step, period_assignment=period_assignment,
-           periods_ida=periods, max_runs=15, tcl_filename=f"model_{seismicity}",
-           export_model_to_tcl=export_model_to_tcl)
+m = Main(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
+         analysis_type=analysis_type, system=system, hinge_model=hingeModel, flag3d=flag3d,
+         direction=direction, export_at_each_step=export_at_each_step, period_assignment=period_assignment,
+         periods_ida=periods, max_runs=15, tcl_filename=f"model_{seismicity}",
+         export_model_to_tcl=export_model_to_tcl)
 
 m.wipe()
 m.run_model()

@@ -9,6 +9,7 @@ import os
 from analysis.solutionAlgorithm import SolutionAlgorithm
 from analysis.static import Static
 from client.model import Model
+from utils.utils import read_text_file
 
 
 class IDA_HTF_3D:
@@ -95,22 +96,6 @@ class IDA_HTF_3D:
             s.static_analysis(self.flag3d)
         return m
 
-    @staticmethod
-    def read_text_file(name, col):
-        """
-        Reads a text file
-        :param name: str                            Name of text file in "*.txt" format
-        :param col: int                             Column of text file to read from
-        :return: ndarray                            Read column in np.array format
-        """
-        f = open(name, 'r')
-        lines = f.readlines()
-        data = np.array([])
-        for x in lines:
-            data = np.append(data, float(x.split()[col]))
-        f.close()
-        return data
-
     def get_IM(self, eq, dt, period, xi):
         """
         Gets Sa(T) of a given record, for a specified value of period T using the Newmark Average Acceleration
@@ -124,7 +109,7 @@ class IDA_HTF_3D:
                                                     pga - peak ground acceleration in g
         """
         # Read the acceleration time series
-        accg = self.read_text_file(eq, 0)
+        accg = read_text_file(eq)
 
         if period == 0.0:
             pga = 0.0
@@ -213,8 +198,8 @@ class IDA_HTF_3D:
         """
         eqnms_list_x = list(pd.read_csv(self.nmsfile_x, header=None)[0])
         eqnms_list_y = list(pd.read_csv(self.nmsfile_y, header=None)[0])
-        dts_list = self.read_text_file(self.dts_file, 0)
-        durs_list = self.read_text_file(self.durs_file, 0)
+        dts_list = read_text_file(self.dts_file)
+        durs_list = read_text_file(self.durs_file)
         return eqnms_list_x, eqnms_list_y, dts_list, durs_list
 
     def time_series(self, dt, pathx, pathy, fx, fy):
