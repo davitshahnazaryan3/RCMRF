@@ -155,7 +155,7 @@ class Sections:
             except TypeError:
                 print('[EXCEPTION] Node ID not provided')
 
-    def hysteretic_hinges(self, et, iNode, jNode, ele, transfTag, flag3d):
+    def hysteretic_hinges(self, et, iNode, jNode, ele, transfTag, flag3d, tcl_file):
         """
         Creates hysteretic hinges
         :param et: int                              Element tag
@@ -216,9 +216,24 @@ class Sections:
         op.uniaxialMaterial('Hysteretic', matTag2, ele['m1'], ele['phi1'], ele['m2'], ele['phi2'], ele['m3'],
                             ele['phi3'], -ele['m1Neg'], -ele['phi1Neg'], -ele['m2Neg'], -ele['phi2Neg'], -ele['m3Neg'],
                             -ele['phi3Neg'], pinchX, pinchY, damage1, damage2, beta)
+
+        # Writing to tcl
+        if tcl_file:
+            tcl_file.write(f"\nuniaxialMaterial Hysteretic {matTag1} {ele['m1']} {ele['phi1']} {ele['m2']} "
+                           f"{ele['phi2']} {ele['m3']} {ele['phi3']} -{ele['m1Neg']} -{ele['phi1Neg']} -{ele['m2Neg']}"
+                           f" -{ele['phi2Neg']} -{ele['m3Neg']} {-ele['phi3Neg']} {pinchX} {pinchY} {damage1}"
+                           f" {damage2} {beta};")
+            tcl_file.write(f"\nuniaxialMaterial Hysteretic {matTag2} {ele['m1']} {ele['phi1']} {ele['m2']} "
+                           f"{ele['phi2']} {ele['m3']} {ele['phi3']} -{ele['m1Neg']} -{ele['phi1Neg']} -{ele['m2Neg']}"
+                           f" -{ele['phi2Neg']} -{ele['m3Neg']} {-ele['phi3Neg']} {pinchX} {pinchY} {damage1}"
+                           f" {damage2} {beta};")
+
         # Elastic section
         if flag3d:
             op.section('Elastic', intTag, float(self.materials['Ec']) * 1000.0, area, iy, iz, Gc, J)
+            if tcl_file:
+                tcl_file.write(f"\nsection Elastic {intTag} {float(self.materials['Ec']) * 1000.0} {area} {iy} {iz} "
+                               f"{Gc} {J};")
         else:
             op.section('Elastic', intTag, float(self.materials['Ec']) * 1000.0, area, iz)
 
@@ -226,6 +241,12 @@ class Sections:
         op.section('Uniaxial', phTag1, matTag1, 'Mz')
         op.section('Uniaxial', phTag2, matTag2, 'Mz')
 
+        if tcl_file:
+            tcl_file.write(f"\nsection Uniaxial {phTag1} {matTag1} Mz;")
+            tcl_file.write(f"\nsection Uniaxial {phTag2} {matTag2} Mz;")
+
+        aggTag1 = int(f"114{et}")
+        aggTag2 = int(f"115{et}")
         if transfTag == 1 and flag3d:
             # Transformation tag 1 refers to the columns
             # Additional hinges are required for bidirectional response for the columns in the 3D model
@@ -235,8 +256,6 @@ class Sections:
             matTag3 = int(f'111{et}')
             matTag4 = int(f'112{et}')
             axialTag = int(f'113{et}')
-            aggTag1 = int(f"114{et}")
-            aggTag2 = int(f"115{et}")
 
             # Beam integration
             op.beamIntegration('HingeRadau', integrationTag, aggTag1, ele['lp'], aggTag2, ele['lp'], intTag)
@@ -255,8 +274,33 @@ class Sections:
             # Aggregate P and Myy behaviour to Mzz behaviour
             op.section("Aggregator", aggTag1, axialTag, "P", matTag3, "My", "-section", phTag1)
             op.section("Aggregator", aggTag2, axialTag, "P", matTag4, "My", "-section", phTag2)
+
+            if tcl_file:
+                tcl_file.write(f"\nuniaxialMaterial Elastic {axialTag} {float(self.materials['Ec']) * 1000.0 * area};")
+                tcl_file.write(f"\nuniaxialMaterial Hysteretic {matTag3} {ele['m1']} {ele['phi1']} {ele['m2']} "
+                               f"{ele['phi2']} {ele['m3']} {ele['phi3']} -{ele['m1Neg']} -{ele['phi1Neg']}"
+                               f" -{ele['m2Neg']} -{ele['phi2Neg']} -{ele['m3Neg']} {-ele['phi3Neg']} "
+                               f"{pinchX} {pinchY} {damage1} {damage2} {beta};")
+                tcl_file.write(f"\nuniaxialMaterial Hysteretic {matTag4} {ele['m1']} {ele['phi1']} {ele['m2']} "
+                               f"{ele['phi2']} {ele['m3']} {ele['phi3']} -{ele['m1Neg']} -{ele['phi1Neg']}"
+                               f" -{ele['m2Neg']} -{ele['phi2Neg']} -{ele['m3Neg']} {-ele['phi3Neg']} "
+                               f"{pinchX} {pinchY} {damage1} {damage2} {beta};")
+
+                tcl_file.write(f"\nsection Aggregator {aggTag1} {axialTag} P {matTag3} My -section {phTag1};")
+                tcl_file.write(f"\nsection Aggregator {aggTag2} {axialTag} P {matTag4} My -section {phTag2};")
+
+                lp = round(ele['lp'], 3)
+                tcl_file.write(f'\nelement forceBeamColumn {int(et)} {iNode} {jNode} {transfTag} "HingeRadau {aggTag1}'
+                               f' {lp} {aggTag2} {lp} {intTag}";')
+
         else:
             # Beam integration
             op.beamIntegration('HingeRadau', integrationTag, phTag1, ele['lp'], phTag2, ele['lp'], intTag)
+
+            lp = round(ele['lp'], 3)
+
+            if tcl_file:
+                tcl_file.write(f'\nelement forceBeamColumn {int(et)} {iNode} {jNode} {transfTag} "HingeRadau {phTag1}'
+                               f' {lp} {phTag2} {lp} {intTag}";')
 
         op.element('forceBeamColumn', int(et), iNode, jNode, transfTag, integrationTag)

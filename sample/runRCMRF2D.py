@@ -1,5 +1,5 @@
 from pathlib import Path
-from master import Master
+from main import Main
 import timeit
 
 
@@ -32,9 +32,9 @@ hingeModel = "Hysteretic"
 analysis_type = ["TH"]
 flag3d = False
 periods = [0.74, 0.1]
-m = Master(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
-           analysis_type=analysis_type, system="Perimeter", hinge_model=hingeModel, flag3d=flag3d,
-           periods_ida=periods, max_runs=15, export_at_each_step=True)
+m = Main(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
+         analysis_type=analysis_type, system="Perimeter", hinge_model=hingeModel, flag3d=flag3d,
+         periods_ida=periods, max_runs=15, export_at_each_step=True)
 
 m.wipe()
 m.run_model()

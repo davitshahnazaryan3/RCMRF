@@ -1,24 +1,23 @@
 """
 Model creator of an RC MRF. Lumped hinge models following the recommendations of Haselton 2007 are used.
 """
-import json
-import pickle
-
+import os
 import openseespy.opensees as op
 import pandas as pd
-
+import json, pickle
+import numpy as np
+from client.geometry import Geometry
+from client.sections import Sections
+from client.recorders import Recorders
+from analysis.static import Static
 from analysis.modal import Modal
 from analysis.spo import SPO
-from analysis.static import Static
-from client.geometry import Geometry
-from client.recorders import Recorders
-from client.sections import Sections
 from utils.utils import *
 
 
-class Model:
+class ModelToTCL:
     def __init__(self, analysis_type, sections_file, loads_file, materials, outputsDir, system='perimeter',
-                 hingeModel='haselton', flag3d=False, direction=0):
+                 hingeModel='haselton', flag3d=False, direction=0, tcl_filename=None):
         """
         Initializes OpenSees model creator
         :param analysis_type: list(str)             Type of analysis for which we are recording [TH, PO, ST, MA, ELF]
@@ -59,6 +58,7 @@ class Model:
         :param hingeModel: str                      Hinge model type (Haselton (4 nodes) or Hysteretic (2 nodes))
         :param flag3d: bool                         True for 3D modelling, False for 2D modelling
         :param direction: int                       Direction of application, 0: x; 1: y
+        :param tcl_filename: str                    TCL filename to export model to
         """
         self.base_nodes = None
         self.base_cols = None
@@ -118,6 +118,10 @@ class Model:
         self.DAMP_MODES = [1, 2]
         self.results = {}
 
+        # File to export model to
+        self.file = None
+        self.tcl_filename = tcl_filename
+
     def create_model(self):
         """
         Initiates model creation
@@ -125,6 +129,22 @@ class Model:
         """
         if self.flag3d:
             op.model('Basic', '-ndm', 3, '-ndf', 6)
+
+            # Write to tcl file
+            if "PO" in self.analysis_type:
+                d = "x" if self.direction == 0 else "y"
+                filename = self.outputsDir / f"Models/{self.tcl_filename}_pushover_{d}.tcl"
+            elif 'ST' in self.analysis_type or 'static' in self.analysis_type or 'gravity' in self.analysis_type:
+                filename = self.outputsDir / f"Models/{self.tcl_filename}_static.tcl"
+            elif 'MA' in self.analysis_type or 'modal' in self.analysis_type:
+                filename = self.outputsDir / f"Models/{self.tcl_filename}_modal.tcl"
+            else:
+                filename = self.outputsDir / f"Models/{self.tcl_filename}.tcl"
+
+            lines = ["# Create Model Global", "wipe;", "model BasicBuilder -ndm 3 -ndf 6;"]
+            self.file = open(filename, "w+")
+            self.file.write("\n".join(lines))
+
         else:
             op.model('Basic', '-ndm', 2, '-ndf', 3)
         print('[INITIATE] Model generation started')
@@ -154,6 +174,7 @@ class Model:
         # Get dataframe containing all nodes of the building / frame
         df = self.g.define_nodes()
 
+        self.file.write("\n\n# Define nodes")
         # Initialization of base nodes and hinges
         base_nodes = []
         hinge_nodes = []
@@ -165,7 +186,8 @@ class Model:
             # Defining nodes
             if self.flag3d:
                 yloc = df['y'][n]
-                op.node(int(df['Node id'][n]), xloc, yloc, zloc)
+                op.node(nodetag, xloc, yloc, zloc)
+                self.file.write(f"\nnode {nodetag} {xloc} {yloc} {zloc};")
             else:
                 yloc = 0.
                 op.node(int(df['Node id'][n]), xloc, zloc)
@@ -190,6 +212,7 @@ class Model:
                     else:
                         # Fix or pin all base nodes
                         op.fix(nodetag, 1, 1, 1, fix, fix, fix)
+                        self.file.write(f"\nfix {nodetag} 1 1 1 1 1 1;")
 
                 else:
                     # Fix the base columns
@@ -203,7 +226,6 @@ class Model:
                     hinge_nodes.append(nodetag)
 
         print('[SUCCESS] Geometric properties have been defined')
-
         return base_nodes, hinge_nodes
 
     def define_transformations(self, col_transf_type='PDelta', beam_transf_tag='PDelta'):
@@ -225,6 +247,14 @@ class Model:
                               "-jntOffset", 0.2, 0.0, 0.0, -0.2, 0.0, 0.0)
                 op.geomTransf(beam_transf_tag, self.BEAM_Y_TRANSF_TAG, 1., 0., 0.,
                               "-jntOffset", 0.0, 0.2, 0.0, 0.0, -0.2, 0.0)
+
+                self.file.write("\n\n# Define geometric transformations")
+                self.file.write(f"\ngeomTransf {col_transf_type} {self.COL_TRANSF_TAG} 0. -1. 0."
+                                f" -jntOffset 0.0 0.0 0.3 0.0 0.0 -0.3;")
+                self.file.write(f"\ngeomTransf {beam_transf_tag} {self.BEAM_X_TRANSF_TAG} 0. -1. 0."
+                                f" -jntOffset 0.2 0.0 0.0 -0.2 0.0 0.0;")
+                self.file.write(f"\ngeomTransf {beam_transf_tag} {self.BEAM_Y_TRANSF_TAG} 1. 0. 0."
+                                f" -jntOffset 0.0 0.2 0.0 0.0 -0.2 0.0;")
 
             else:
                 op.geomTransf(col_transf_type, self.COL_TRANSF_TAG)
@@ -471,6 +501,8 @@ class Model:
         Defining masses
         :return: None
         """
+        self.file.write("\n\n# Define masses")
+
         if self.flag3d:
             nbays_x = max(self.sections["x"]["Bay"] - 1)
             nbays_y = max(self.sections["y"]["Bay"] - 1)
@@ -518,9 +550,12 @@ class Model:
                                             spans_y[ybay - 2] + spans_y[ybay - 1]) / 4
 
                         # Mass based on tributary area
-                        q = self.loads[(self.loads["Pattern"] == "q") & (self.loads["Storey"] == st)]["Load"].iloc[0]
+                        q = self.loads[(self.loads["Pattern"] == "seismic") &
+                                       (self.loads["Storey"] == st)]["Load"].iloc[0]
                         mass = area * q / 9.81
                         op.mass(nodetag, mass, mass, mass, self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
+                        self.file.write(f"\nmass {nodetag} {mass} {mass} {mass} {self.NEGLIGIBLE} {self.NEGLIGIBLE} "
+                                        f"{self.NEGLIGIBLE};")
 
         else:
             masses = self.loads[(self.loads['Pattern'] == 'mass')].reset_index(drop=True)
@@ -554,7 +589,7 @@ class Model:
 
         elif analysis == 'MA' or analysis == 'modal':
             lam = kwargs.get('lam', None)
-            results = r.ma_recorder(num_modes, lam, None)
+            results = r.ma_recorder(num_modes, lam, self.outputsDir)
 
         elif analysis == 'ELF' or analysis == 'ELFM':
             results = r.st_recorder(base_nodes)
@@ -574,6 +609,8 @@ class Model:
                                                         will be given to point loads)
         :return: None
         """
+        self.file.write("\n\n# Apply gravity loads")
+
         # For now, point loads are not created for Haselton model, so force distributed loads
         if self.hingeModel == "haselton":
             apply_loads = True
@@ -582,6 +619,7 @@ class Model:
         if apply_loads:
             op.timeSeries('Linear', 1)
             op.pattern('Plain', 1, 1)
+            self.file.write("\npattern Plain 1 Linear {")
 
             if self.hingeModel == 'haselton':
                 distributed = self.loads[(self.loads['Pattern'] == 'distributed')].reset_index(drop=True)
@@ -629,8 +667,17 @@ class Model:
                                             self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
                                     op.load(nodej, self.NEGLIGIBLE, self.NEGLIGIBLE, -load * spans_x[xbay - 1] / 2,
                                             self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
+                                    self.file.write(f"\n\tload {nodei} {self.NEGLIGIBLE} {self.NEGLIGIBLE}"
+                                                    f" {-load * spans_x[xbay - 1] / 2} {self.NEGLIGIBLE}"
+                                                    f" {self.NEGLIGIBLE} {self.NEGLIGIBLE};")
+                                    self.file.write(f"\n\tload {nodej} {self.NEGLIGIBLE} {self.NEGLIGIBLE}"
+                                                    f" {-load * spans_x[xbay - 1] / 2} {self.NEGLIGIBLE}"
+                                                    f" {self.NEGLIGIBLE} {self.NEGLIGIBLE};")
+
                                 else:
                                     op.eleLoad('-ele', beam, '-type', '-beamUniform', -load, self.NEGLIGIBLE)
+                                    self.file.write(f"\n\teleLoad -ele {beam} -type -beamUniform -{load} "
+                                                    f"{self.NEGLIGIBLE};")
 
                                 # Additional load for interior beams
                                 if 1 < ybay < len(spans_y) + 1:
@@ -651,8 +698,17 @@ class Model:
                                         op.load(nodej, self.NEGLIGIBLE, self.NEGLIGIBLE,
                                                 -load * spans_x[xbay - 1] / 2,
                                                 self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
+                                        self.file.write(f"\n\tload {nodei} {self.NEGLIGIBLE} {self.NEGLIGIBLE}"
+                                                        f" {-load * spans_x[xbay - 1] / 2} {self.NEGLIGIBLE}"
+                                                        f" {self.NEGLIGIBLE} {self.NEGLIGIBLE};")
+                                        self.file.write(f"\n\tload {nodej} {self.NEGLIGIBLE} {self.NEGLIGIBLE}"
+                                                        f" {-load * spans_x[xbay - 1] / 2} {self.NEGLIGIBLE}"
+                                                        f" {self.NEGLIGIBLE} {self.NEGLIGIBLE};")
+
                                     else:
                                         op.eleLoad('-ele', beam, '-type', '-beamUniform', -load, self.NEGLIGIBLE)
+                                        self.file.write(f"\n\teleLoad -ele {beam} -type -beamUniform -{load} "
+                                                        f"{self.NEGLIGIBLE};")
 
                             else:
                                 # Beams along Y direction
@@ -677,8 +733,17 @@ class Model:
                                             self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
                                     op.load(nodej, self.NEGLIGIBLE, self.NEGLIGIBLE, -load * spans_y[ybay - 1] / 2,
                                             self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
+                                    self.file.write(f"\n\tload {nodei} {self.NEGLIGIBLE} {self.NEGLIGIBLE}"
+                                                    f" {-load * spans_y[ybay - 1] / 2} {self.NEGLIGIBLE}"
+                                                    f" {self.NEGLIGIBLE} {self.NEGLIGIBLE};")
+                                    self.file.write(f"\n\tload {nodej} {self.NEGLIGIBLE} {self.NEGLIGIBLE}"
+                                                    f" {-load * spans_y[ybay - 1] / 2} {self.NEGLIGIBLE}"
+                                                    f" {self.NEGLIGIBLE} {self.NEGLIGIBLE};")
+
                                 else:
                                     op.eleLoad('-ele', beam, '-type', '-beamUniform', -load, self.NEGLIGIBLE)
+                                    self.file.write(f"\n\teleLoad -ele {beam} -type -beamUniform -{load} "
+                                                    f"{self.NEGLIGIBLE};")
 
                                 # Additional load for interior beams
                                 if 1 < xbay < len(spans_x) + 1:
@@ -699,8 +764,16 @@ class Model:
                                         op.load(nodej, self.NEGLIGIBLE, self.NEGLIGIBLE,
                                                 -load * spans_y[ybay - 1] / 2,
                                                 self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
+                                        self.file.write(f"\n\tload {nodei} {self.NEGLIGIBLE} {self.NEGLIGIBLE}"
+                                                        f" {-load * spans_y[ybay - 1] / 2} {self.NEGLIGIBLE}"
+                                                        f" {self.NEGLIGIBLE} {self.NEGLIGIBLE};")
+                                        self.file.write(f"\n\tload {nodej} {self.NEGLIGIBLE} {self.NEGLIGIBLE}"
+                                                        f" {-load * spans_y[ybay - 1] / 2} {self.NEGLIGIBLE}"
+                                                        f" {self.NEGLIGIBLE} {self.NEGLIGIBLE};")
                                     else:
                                         op.eleLoad('-ele', beam, '-type', '-beamUniform', -load, self.NEGLIGIBLE)
+                                        self.file.write(f"\n\teleLoad -ele {beam} -type -beamUniform -{load} "
+                                                        f"{self.NEGLIGIBLE};")
 
                     else:
                         distributed = self.loads[(self.loads['Pattern'] == 'distributed')].reset_index(drop=True)
@@ -725,6 +798,8 @@ class Model:
                 print('[SUCCESS] Gravity loads as point loads have been defined')
             else:
                 print('[SUCCESS] Gravity loads aas distributed loads have been defined')
+
+            self.file.write("\n};")
 
     def perform_analysis(self, elfm_filename=None, **kwargs):
         """
@@ -762,14 +837,14 @@ class Model:
                         op.load(int(f"{self.g.nbays + 1}{st + 1}"), load, self.NEGLIGIBLE, self.NEGLIGIBLE)
 
             s = Static()
-            s.static_analysis(None, self.flag3d)
+            s.static_analysis(self.flag3d)
             self.results['ELF'] = self.set_recorders('ELF', base_nodes=self.base_nodes)
             print('[SUCCESS] ELF done')
 
         if 'ST' in self.analysis_type or 'static' in self.analysis_type or 'gravity' in self.analysis_type:
             print('[STEP] Gravity static analysis started')
             s = Static()
-            s.static_analysis(None, self.flag3d)
+            s.static_analysis(self.outputsDir, self.flag3d)
             self.results['Gravity'] = self.set_recorders('ST', base_nodes=self.base_nodes)
 
             filepath = self.outputsDir / 'ST'
@@ -780,8 +855,13 @@ class Model:
             print('[SUCCESS] Static gravity analysis done')
 
         if 'MA' in self.analysis_type or 'modal' in self.analysis_type:
+            self.file.write("\n\n# Call Modal analysis")
+            self.file.write("\nsource modal_recorders.tcl")
+            self.file.write("\nsource modal_analysis.tcl")
+            self.file.write("\nwipe;")
+
             print('[STEP] Modal analysis started')
-            m = Modal(self.NUM_MODES, self.DAMP_MODES, damping)
+            m = Modal(self.NUM_MODES, self.outputsDir, self.DAMP_MODES, damping)
             self.results['Modal'], positions = self.set_recorders('MA', num_modes=self.NUM_MODES, lam=m.lam)
 
             # Modify positions of modal parameters
@@ -806,6 +886,14 @@ class Model:
             mode_shape = self.results['Modal']['Mode1']
 
         if 'PO' in self.analysis_type or 'pushover' in self.analysis_type:
+            self.file.write("\n\n# Static analysis")
+            self.file.write("\nsource static.tcl")
+            self.file.write("\n\n# Call Pushover analysis")
+            d = "x" if self.direction == 0 else "y"
+            self.file.write(f"\nsource spo_recorders_{d}_{self.tcl_filename[6:]}.tcl")
+            self.file.write(f"\nsource spo_analysis_{d}_{self.tcl_filename[6:]}.tcl")
+            self.file.write("\nwipe;")
+
             control_nodes = []
             for i in range(self.g.nst):
                 if not self.flag3d:
@@ -838,16 +926,17 @@ class Model:
             dref = 0.1 * max(self.g.heights)
 
             # Call the SPO object
-            spo = SPO(id_ctrl_node, id_ctrl_dof, self.base_cols, dref=dref, flag3d=self.flag3d,
-                      direction=self.direction, filename=None, site=None)
+            spo = SPO(id_ctrl_node, id_ctrl_dof, self.base_cols, self.base_nodes, dref, flag3d=self.flag3d,
+                      direction=self.direction, filename=self.outputsDir / "Models", site=self.tcl_filename[6:])
 
             spo.load_pattern(control_nodes, load_pattern=spo_pattern, heights=self.g.heights, mode_shape=mode_shape,
                              nbays_x=nbays_x, nbays_y=nbays_y)
             spo.set_analysis(heights=self.g.heights)
             outputs = spo.seek_solution()
-            filepath = self.outputsDir / 'SPO'
+            filepath = self.outputsDir / f'SPO_{self.tcl_filename[6:]}_{self.direction+1}'
             with open(f"{filepath}.pickle", 'wb') as (f):
                 pickle.dump(outputs, f)
+
             print('[SUCCESS] Static pushover analysis done')
 
     def lumped_hinge_element(self):
@@ -856,6 +945,7 @@ class Model:
         :return: dict                       Dictionary containing element IDs to be used for recording internal forces
         """
         s = Sections(self.sections, self.materials)
+        self.file.write("\n\n# Define nonlinear elements")
 
         base_cols = []
         if self.flag3d:
@@ -906,7 +996,9 @@ class Model:
                         # Base columns
                         if st == 1:
                             base_cols.append(et)
-                        s.hysteretic_hinges(et, inode, jnode, eleHinge, transfTag, self.flag3d, None)
+
+                        self.file.write(f"\n# Column {et}, connected by {inode}, {jnode} nodes:")
+                        s.hysteretic_hinges(et, inode, jnode, eleHinge, transfTag, self.flag3d, self.file)
 
             # Add beam elements in X direction
             for ybay in range(1, int(nbays_y + 2)):
@@ -930,7 +1022,9 @@ class Model:
                             eleHinge = hinge_gr[(hinge_gr["Element"] == "Beam") & (hinge_gr["Storey"] == st)
                                                 & (hinge_gr["Direction"] == 0)].reset_index(drop=True).iloc[0]
                             elements["Beams"]["gravity_x"].append(et)
-                        s.hysteretic_hinges(et, inode, jnode, eleHinge, transfTag, self.flag3d, None)
+
+                        self.file.write(f"\n# Beam in X {et}, connected by {inode}, {jnode} nodes:")
+                        s.hysteretic_hinges(et, inode, jnode, eleHinge, transfTag, self.flag3d, self.file)
 
             # Add beam elements in Y direction
             for xbay in range(1, int(nbays_x + 2)):
@@ -953,7 +1047,9 @@ class Model:
                             eleHinge = hinge_gr[(hinge_gr["Element"] == "Beam") & (hinge_gr["Storey"] == st)
                                                 & (hinge_gr["Direction"] == 1)].reset_index(drop=True).iloc[0]
                             elements["Beams"]["gravity_y"].append(et)
-                        s.hysteretic_hinges(et, inode, jnode, eleHinge, transfTag, self.flag3d, None)
+
+                        self.file.write(f"\n# Beam in Y {et}, connected by {inode}, {jnode} nodes:")
+                        s.hysteretic_hinges(et, inode, jnode, eleHinge, transfTag, self.flag3d, self.file)
 
         else:
             # Initialize elements
@@ -974,25 +1070,28 @@ class Model:
                     if ele['Storey'] == 1:
                         base_cols.append(et)
 
-                s.hysteretic_hinges(et, None, None, ele, transfTag, self.flag3d, None)
+                s.hysteretic_hinges(et, None, None, ele, transfTag, self.flag3d, self.file)
 
         return elements, base_cols
 
     def rigid_diaphragm(self):
+        self.file.write("\n\n# Construct a rigid diaphragm")
+
         nbays_x = max(self.sections["x"]["Bay"] - 1)
         nbays_y = max(self.sections["y"]["Bay"] - 1)
         # Define Rigid floor diaphragm
         master_nodes = []
         cnt = 0
         for st in range(1, self.g.nst + 1):
-            masternodetag = int(f"{int(nbays_x / 2 + 1)}{int(nbays_y / 2 + 1)}{st}")
-            master_nodes.append(masternodetag)
+            hive = int(f"{int(nbays_x / 2 + 1)}{int(nbays_y / 2 + 1)}{st}")
+            master_nodes.append(hive)
             # Define rigid diaphragm
             for xbay in range(int(nbays_x + 1)):
                 for ybay in range(int(nbays_y + 1)):
-                    nodetag = int(f"{1 + xbay}{1 + ybay}{st}")
-                    if nodetag != masternodetag:
-                        op.rigidDiaphragm(3, masternodetag, nodetag)
+                    bee = int(f"{1 + xbay}{1 + ybay}{st}")
+                    if bee != hive:
+                        op.rigidDiaphragm(3, hive, bee)
+                        self.file.write(f"\nrigidDiaphragm 3 {hive} {bee};")
             cnt += 1
 
     def model(self):

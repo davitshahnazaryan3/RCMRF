@@ -15,6 +15,8 @@ Hinge model information in secondary direction (not necessary for 2D)
 Hinge model information for gravity frame elements (not necessary for 2D)
 """
 import openseespy.opensees as op
+
+from analysis.multiStripeAnalysis import get_records
 from client.model import Model
 from analysis.static import Static
 from pathlib import Path
@@ -23,13 +25,15 @@ import os
 import json
 import pickle
 from analysis.ida_htf_3d import IDA_HTF_3D
+from client.modelToTCL import ModelToTCL
+from utils.utils import createFolder, get_time, get_start_time
 
 
-class Master:
+class Main:
     def __init__(self, sections_file, loads_file, materials_file, outputsDir, gmdir=None, gmfileNames=None, IM_type=2,
                  max_runs=15, analysis_time_step=.01, drift_capacity=10., analysis_type=None, system="Perimeter",
                  hinge_model="Hysteretic", flag3d=False, direction=0, export_at_each_step=False,
-                 period_assignment=None, periods_ida=None):
+                 period_assignment=None, periods_ida=None, tcl_filename=None, export_model_to_tcl=False):
         """
         Initializes master file
         :param sections_file: str                   Name of file containing section data in '*.csv' format
@@ -53,8 +57,10 @@ class Master:
         :param flag3d: bool                         True for 3D modelling, False for 2D modelling
         :param direction: int                       Direction of analysis
         :param export_at_each_step: bool            Exporting at each step, i.e. record-run
-        :param period_assignment: dict              Period assigment IDs (for 3D only)
+        :param period_assignment: dict              Period assignment IDs (for 3D only)
         :param periods_ida: list                    Periods to use for IDA, optional, in case MA periods are not needed
+        :param tcl_filename: str                    TCL filename to export to
+        :param export_model_to_tcl: bool            Exporting to tcl? If True, tcl_filename must be provided
         """
         # TODO, add support for Haselton, currently only a placeholder, need to adapt for 3D etc.
         # list of strings for 3D modelling, and string for 2D modelling
@@ -78,6 +84,8 @@ class Master:
         self.direction = direction
         self.period_assignment = period_assignment
         self.periods_ida = periods_ida
+        self.tcl_filename = tcl_filename
+        self.export_model_to_tcl = export_model_to_tcl
         self.APPLY_GRAVITY_ELF = False
         self.FIRST_INT = .05
         self.INCR_STEP = .05
@@ -89,24 +97,14 @@ class Master:
         self.DTS_FILE = gmdir / gmfileNames[2]
         self.DURS_FILE = gmdir / gmfileNames[3]
 
+        # Records for MSA
+        self.records = None
+
         # Create an outputs directory if none exists
-        self.createFolder(outputsDir)
+        createFolder(outputsDir)
 
         if direction != 0 and flag3d and analysis_type == "MA":
             print("[WARNING] Direction should be set to 0 for Modal Analysis!")
-
-    @staticmethod
-    def createFolder(directory):
-        """
-        Checks whether provided directory exists, if no creates one
-        :param directory: str
-        :return: None
-        """
-        try:
-            if not os.path.exists(directory):
-                os.makedirs(directory)
-        except OSError:
-            print('Error: Creating directory. ' + directory)
 
     @staticmethod
     def wipe():
@@ -122,17 +120,46 @@ class Master:
         :param generate_model: bool                         Generate model or not
         :return: class                                      Object Model
         """
-        m = Model(self.analysis_type, self.sections_file, self.loads_file, self.materials_file, self.outputsDir,
-                  self.system, hingeModel=self.hinge_model, flag3d=self.flag3d, direction=self.direction)
+        if self.export_model_to_tcl and self.tcl_filename:
+            m = ModelToTCL(self.analysis_type, self.sections_file, self.loads_file, self.materials_file,
+                           self.outputsDir, self.system, hingeModel=self.hinge_model, flag3d=self.flag3d,
+                           direction=self.direction, tcl_filename=self.tcl_filename)
+        else:
+            m = Model(self.analysis_type, self.sections_file, self.loads_file, self.materials_file,
+                      self.outputsDir, self.system, hingeModel=self.hinge_model, flag3d=self.flag3d,
+                      direction=self.direction)
+
         # Generate the model if specified
         if generate_model:
             m.model()
+
             if "PO" in self.analysis_type:
                 m.define_loads(m.elements, apply_point=False)
                 s = Static()
-                s.static_analysis(self.flag3d)
+                s.static_analysis(self.outputsDir, self.flag3d)
 
         return m
+
+    def get_modal_parameters(self):
+        try:
+            if self.periods_ida is None:
+                with open(self.outputsDir / "MA.json") as f:
+                    results = json.load(f)
+                if self.flag3d:
+                    period = [results["Periods"][self.period_assignment["x"]],
+                              results["Periods"][self.period_assignment["y"]]]
+                else:
+                    period = results["Periods"][0]
+                damping = results["Damping"][0]
+                omegas = results["CircFreq"]
+            else:
+                period = self.periods_ida
+                damping = 0.05
+                omegas = 2 * np.pi / (np.array(period))
+
+        except:
+            raise ValueError("[EXCEPTION] Modal analysis data does not exist.")
+        return period, damping, omegas
 
     def run_model(self):
         """
@@ -153,13 +180,15 @@ class Master:
                 # Static pushover analysis needs to be run after modal analysis
                 with open(self.outputsDir / "MA.json") as f:
                     modal_analysis_outputs = json.load(f)
+
                 # Modal shape as the SPO lateral load pattern shape
                 if self.direction == 0:
                     tag = self.period_assignment["x"]
-                    mode_shape = np.abs(modal_analysis_outputs[f"Mode{tag+1}"])
+                    mode_shape = np.abs(modal_analysis_outputs[f"Mode{tag + 1}"])
                 else:
                     tag = self.period_assignment["y"]
-                    mode_shape = np.abs(modal_analysis_outputs[f"Mode{tag+1}"])
+                    mode_shape = np.abs(modal_analysis_outputs[f"Mode{tag + 1}"])
+
                 # Normalize, helps to avoid convergence issues
                 mode_shape = mode_shape / max(mode_shape)
                 mode_shape = np.round(mode_shape, 2)
@@ -184,28 +213,13 @@ class Master:
 
         elif "TH" in self.analysis_type or "timehistory" in self.analysis_type or "IDA" in self.analysis_type:
             # Create a folder for NLTHA
-            self.createFolder(self.outputsDir / "NLTHA")
+            createFolder(self.outputsDir / "NLTHA")
 
             # Nonlinear time history analysis
             print("[INITIATE] IDA started")
-            try:
-                if self.periods_ida is None:
-                    with open(self.outputsDir / "MA.json") as f:
-                        results = json.load(f)
-                    if self.flag3d:
-                        period = [results["Periods"][self.period_assignment["x"]],
-                                  results["Periods"][self.period_assignment["y"]]]
-                    else:
-                        period = results["Periods"][0]
-                    damping = results["Damping"][0]
-                    omegas = results["CircFreq"]
-                else:
-                    period = self.periods_ida
-                    damping = 0.05
-                    omegas = 2 * np.pi / (np.array(period))
 
-            except:
-                raise ValueError("[EXCEPTION] Modal analysis data does not exist.")
+            # Get MA parameters
+            period, damping, omegas = self.get_modal_parameters()
 
             # Initialize
             ida = IDA_HTF_3D(self.FIRST_INT, self.INCR_STEP, self.max_runs, self.IM_type, period, damping, omegas,
@@ -229,6 +243,18 @@ class Master:
 
             print("[SUCCESS] IDA done")
 
+        elif "MSA" in self.analysis_type:
+            # TODO, currently supports space and 3D with hysteretic modelling
+
+            # Create a folder for NLTHA
+            createFolder(self.outputsDir / "MSA")
+
+            # Nonlinear time history analysis
+            print("[INITIATE] MSA started")
+
+            # The Set-up
+            self.records = get_records(self.gmdir, output_dir=self.outputsDir / "MSA")
+
         else:
             # Runs static or modal analysis (ST or MA)
             m = self.call_model()
@@ -238,17 +264,7 @@ class Master:
 
 if __name__ == "__main__":
 
-    def truncate(n, decimals=0):
-        multiplier = 10 ** decimals
-        return int(n * multiplier) / multiplier
-
-    def get_time(start_time):
-        elapsed = timeit.default_timer() - start_time
-        print('Running time: ', truncate(elapsed, 2), ' seconds')
-        print('Running time: ', truncate(elapsed / float(60), 2), ' minutes')
-
-    import timeit
-    start_time = timeit.default_timer()
+    start_time = get_start_time()
 
     # Directories
     directory_x = Path.cwd().parents[0] / ".applications/LOSS Validation Manuscript/Case21/Cache/framex"
@@ -276,7 +292,7 @@ if __name__ == "__main__":
 
     # RCMRF inputs
     hingeModel = "Hysteretic"
-    analysis_type = ["TH"]
+    analysis_type = ["ST"]
     # Run MA always with direction = 0
     direction = 0
     flag3d = True
@@ -284,10 +300,10 @@ if __name__ == "__main__":
     period_assignment = {"x": 0, "y": 1}
     periods = [0.72, 0.62]
     # Let's go...
-    m = Master(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
-               analysis_type=analysis_type, system="Perimeter", hinge_model=hingeModel, flag3d=flag3d,
-               direction=direction, export_at_each_step=export_at_each_step, period_assignment=period_assignment,
-               periods_ida=periods, max_runs=15)
+    m = Main(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
+             analysis_type=analysis_type, system="Perimeter", hinge_model=hingeModel, flag3d=flag3d,
+             direction=direction, export_at_each_step=export_at_each_step, period_assignment=period_assignment,
+             periods_ida=periods, max_runs=15, tcl_filename="low")
 
     m.wipe()
     m.run_model()

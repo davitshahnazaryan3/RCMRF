@@ -5,13 +5,13 @@ import openseespy.opensees as op
 
 
 class Static:
-    def __init__(self):
-        self.NSTEP = 1
-        self.TOL = 1e-08
+    NSTEP = 1
+    TOL = 1e-08
 
-    def static_analysis(self, flag3d=False):
+    def static_analysis(self, path, flag3d=False):
         """
         Starts static analysis
+        :param path: str
         :param flag3d: bool
         :return: None
         """
@@ -32,6 +32,7 @@ class Static:
             op.constraints('Plain')
             op.test('NormDispIncr', self.TOL, 6)
             op.system('BandGeneral')
+
         # Use Newton's solution algorithm: updates tangent stiffness at every iteration
         op.algorithm('Newton')
         # Define type of analysis (static or transient)
@@ -40,3 +41,18 @@ class Static:
         op.analyze(self.NSTEP)
         # Maintain constant gravity loads and reset time to zero
         op.loadConst('-time', 0.0)
+
+        # Write to a tcl file
+        if path:
+            file = open(path / "Models/static.tcl", "w+")
+            file.write("# Static analysis parameters")
+            file.write("\nconstraints Penalty 1.0e15 1.0e15;")
+            file.write("\nnumberer RCM;")
+            file.write("\nsystem UmfPack;")
+            file.write(f"\ntest NormDispIncr {self.TOL} 6;")
+            file.write("\nalgorithm Newton;")
+            file.write(f"\nintegrator LoadControl {dgravity};")
+            file.write("\nanalysis Static;")
+            file.write(f"\nanalyze {self.NSTEP};")
+            file.write("\nloadConst -time 0.0;")
+            file.close()

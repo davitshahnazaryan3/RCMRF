@@ -1,5 +1,5 @@
 from pathlib import Path
-from master import Master
+from main import Main
 import timeit
 import pickle
 
@@ -50,10 +50,10 @@ flag3d = True
 export_at_each_step = True
 period_assignment = {"x": 1, "y": 0}
 periods = [0.89, 0.87]
-m = Master(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
-           analysis_type=analysis_type, system=system, hinge_model=hingeModel, flag3d=flag3d,
-           direction=direction, export_at_each_step=export_at_each_step, period_assignment=period_assignment,
-           periods_ida=periods, max_runs=15)
+m = Main(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
+         analysis_type=analysis_type, system=system, hinge_model=hingeModel, flag3d=flag3d,
+         direction=direction, export_at_each_step=export_at_each_step, period_assignment=period_assignment,
+         periods_ida=periods, max_runs=15)
 
 m.wipe()
 m.run_model()

@@ -69,11 +69,12 @@ class Recorders:
 
         return results
 
-    def ma_recorder(self, num_modes, lam):
+    def ma_recorder(self, num_modes, lam, path):
         """
         Records modal shapes
         :param num_modes: int                       Number of modal shapes to record
         :param lam: list                            Eigenvectors
+        :param path: str                            Path to export Modal_analysis.tcl to
         :return: dict                               Dictionary containing modal shape information
         """
         if self.flag3d:
@@ -85,10 +86,16 @@ class Recorders:
             total_mass = np.array([0] * 6)
 
             # Compute total masses
+            masses = np.zeros(self.geometry.nst)
+
             for node in nodes:
                 indf = len(op.nodeDisp(node))
                 for i in range(indf):
                     total_mass[i] += op.nodeMass(node, i + 1)
+
+                node = str(node)
+                if node[-1] != "0":
+                    masses[int(node[-1]) - 1] += op.nodeMass(int(node), 1)
 
             # Results for each mode
             mode_data = np.zeros((num_modes, 4))
@@ -138,11 +145,67 @@ class Recorders:
             positions = positions[:2]
 
             results = {"Mode1": [], "Mode2": []}
+
+            # Initialize modal shape
+            modalShape = np.zeros((self.geometry.nst, 2))
             for st in range(self.geometry.nst):
                 nodetag = int(f"{self.geometry.nbays[0] + 1}{self.geometry.nbays[1] + 1}{st + 1}")
+
                 # Mode 1 refers to X direction, and Mode 2 refers to Y direction
                 results["Mode1"].append(op.nodeEigenvector(nodetag, 1, int(positions[0] + 1)))
                 results["Mode2"].append(op.nodeEigenvector(nodetag, 2, int(positions[1] + 1)))
+                # file.write(f"\nlappend mode1 [nodeEigenvector {nodetag} 1 {int(positions[0] + 1)}]")
+                # file.write(f"\nlappend mode2 [nodeEigenvector {nodetag} 2 {int(positions[1] + 1)}]")
+
+                # First mode shape (also for 2D model)
+                modalShape[st, 0] = op.nodeEigenvector(nodetag, 1, int(positions[0] + 1))
+                # Second mode shape
+                modalShape[st, 1] = op.nodeEigenvector(nodetag, 2, int(positions[1] + 1))
+
+            # Normalize the modal shapes (first two modes, most likely associated with X and Y directions unless
+            # there are large torsional effects)
+            modalShape = np.abs(modalShape) / np.max(np.abs(modalShape), axis=0)
+
+            # Calculate the first mode participation factor and effective modal mass
+            M = np.zeros((self.geometry.nst, self.geometry.nst))
+            for st in range(self.geometry.nst):
+                M[st][st] = masses[st]
+
+            # Identity matrix
+            identity = np.ones((1, self.geometry.nst))
+
+            gamma = np.zeros(2)
+            mstar = np.zeros(2)
+            for i in range(2):
+                # Modal participation factor
+                gamma[i] = (modalShape[:, i].transpose().dot(M)).dot(identity.transpose()) / \
+                           (modalShape[:, i].transpose().dot(M)).dot(modalShape[:, i])
+
+                # Modal mass
+                mstar[i] = (modalShape[:, i].transpose().dot(M)).dot(identity.transpose())
+
+            # Modify indices of modal properties as follows:
+            # index 0 = direction x
+            # index 1 = direction y
+            period = np.array([period[i] for i in range(len(positions))])
+            gamma = np.array([gamma[i] for i in range(len(positions))])
+            mstar = np.array([mstar[i] for i in range(len(positions))])
+
+            if path:
+                file = open(path / "Models/modal_recorders.tcl", "w+")
+                file.write("# Extracting first two modal shapes")
+                # file.write("\nset mode1 {};")
+                # file.write("\nset mode2 {};")
+
+                nstart = int(f"{self.geometry.nbays[0] + 1}{self.geometry.nbays[1] + 1}{1}")
+                nend = int(f"{self.geometry.nbays[0] + 1}{self.geometry.nbays[1] + 1}{self.geometry.nst}")
+
+                file.write('\nrecorder Node -file mode1.txt -nodeRange ' +
+                           f'{nstart} {nend} -dof {int(positions[0] + 1)} "eigen 1";')
+                file.write('\nrecorder Node -file mode2.txt -nodeRange ' +
+                           f'{nstart} {nend} -dof {int(positions[1] + 1)} "eigen 2";')
+                file.close()
+
         else:
             results = {}
             for k in range(min(num_modes, 3)):
