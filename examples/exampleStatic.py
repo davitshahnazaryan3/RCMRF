@@ -5,7 +5,7 @@ Writes model to a .tcl file
 """
 
 from pathlib import Path
-from main import Main
+from rcmrf import rcmrf
 import pickle
 
 from utils.utils import get_time, get_start_time, createFolder
@@ -32,8 +32,8 @@ with open(section_file, "rb") as f:
 analysis_type = ["ST"]
 flag3d = True
 
-m = Main(section_file, loads_file, materials_file, outputsDir, analysis_type=analysis_type, flag3d=flag3d,
-         tcl_filename="model")
+m = rcmrf(section_file, loads_file, materials_file, outputsDir, analysis_type=analysis_type, flag3d=flag3d,
+          tcl_filename="model")
 
 m.wipe()
 m.run_model()

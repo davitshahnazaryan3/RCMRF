@@ -29,14 +29,14 @@ from client.modelToTCL import ModelToTCL
 from utils.utils import createFolder, get_time, get_start_time
 
 
-class Main:
+class rcmrf:
     def __init__(self, sections_file, loads_file, materials_file, outputsDir, gmdir=None, gmfileNames=None, IM_type=2,
                  max_runs=15, analysis_time_step=.01, drift_capacity=10., analysis_type=None, system="Space",
                  hinge_model="Hysteretic", flag3d=False, direction=0, export_at_each_step=True,
                  period_assignment=None, periods_ida=None, tcl_filename=None, modal_analysis_path=None):
         """
         Initializes master file
-        :param sections_file: str                   Name of file containing section data in '*.csv' format
+        :param sections_file: str                   Name of file containing section data in '*.csv' or '*.pickle' format
         :param loads_file: str                      Name of file containing load data in '*.csv' format
         :param materials_file: dict                 Concrete and reinforcement material properties
         :param outputsDir: str                      Directory for exporting the analyses results
@@ -62,7 +62,6 @@ class Main:
         :param tcl_filename: str                    TCL filename to export to
         :param modal_analysis_path: Path            Path to modal_analysis_results.json
         """
-        # TODO, add support for Haselton, currently only a placeholder, need to adapt for 3D etc.
         # list of strings for 3D modelling, and string for 2D modelling
         self.sections_file = sections_file
 
@@ -311,10 +310,10 @@ if __name__ == "__main__":
     period_assignment = {"x": 0, "y": 1}
     periods = [0.72, 0.62]
     # Let's go...
-    m = Main(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
-             analysis_type=analysis_type, system="Perimeter", hinge_model=hingeModel, flag3d=flag3d,
-             direction=direction, export_at_each_step=export_at_each_step, period_assignment=period_assignment,
-             periods_ida=periods, max_runs=15, tcl_filename="low")
+    m = rcmrf(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
+              analysis_type=analysis_type, system="Perimeter", hinge_model=hingeModel, flag3d=flag3d,
+              direction=direction, export_at_each_step=export_at_each_step, period_assignment=period_assignment,
+              periods_ida=periods, max_runs=15, tcl_filename="low")
 
     m.wipe()
     m.run_model()

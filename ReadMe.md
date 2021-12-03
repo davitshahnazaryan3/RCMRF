@@ -7,7 +7,6 @@ May use multiprocessing to carry out multiple stripe analysis (non-linear time h
 
 May be used in any os system.
 
-
 **Required libraries**: requirements.txt
 
       python -m pip install -r requirements.txt
@@ -160,6 +159,9 @@ Example 5: IDA - exampleIDA.py
 Example 6: Visualize - visualizeSPO.py
 
 
+Example 7: 2D model with Haselton springs - exampleHaselton2D.py
+
+
 </details>
 
 ### Future
@@ -168,15 +170,11 @@ Example 6: Visualize - visualizeSPO.py
 <summary>Show/Hide</summary>
 <br>
 
-* [ ] MA mid NLTHA 
 * [ ] Quality testing
 * [ ] Haselton hinge models, example
 * [ ] 2D application examples
 * [ ] Elastic models
-* [ ] Add DOI for new release
-* [ ] Into a library
 * [x] 3D application examples
-* [ ] IDA_HTF necessary?
 
 
 </details>

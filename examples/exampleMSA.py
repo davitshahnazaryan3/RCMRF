@@ -9,7 +9,7 @@ processors.
 
 from pathlib import Path
 
-from main import Main
+from rcmrf import rcmrf
 import pickle
 
 from utils.utils import get_time, get_start_time
@@ -48,10 +48,10 @@ if __name__ == "__main__":
     analysis_time_step = 0.01
     period_assignment = {"x": 1, "y": 0}
 
-    m = Main(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, modal_analysis_path=modal_analysis_path,
-             analysis_type=analysis_type, system=system, hinge_model=hingeModel, flag3d=flag3d, gmfileNames=gmfileNames,
-             export_at_each_step=export_at_each_step, analysis_time_step=analysis_time_step,
-             period_assignment=period_assignment)
+    m = rcmrf(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, modal_analysis_path=modal_analysis_path,
+              analysis_type=analysis_type, system=system, hinge_model=hingeModel, flag3d=flag3d, gmfileNames=gmfileNames,
+              export_at_each_step=export_at_each_step, analysis_time_step=analysis_time_step,
+              period_assignment=period_assignment)
 
     m.wipe()
     m.run_model()

@@ -4,7 +4,7 @@ Performs incremental dynamic analysis using a single pair of records with 10 run
 Note: for full IDA, a suite of records must be increased.
 """
 from pathlib import Path
-from main import Main
+from rcmrf import rcmrf
 import pickle
 
 from utils.utils import get_time, get_start_time
@@ -39,9 +39,9 @@ export_at_each_step = False
 analysis_time_step = 0.01
 max_runs = 10
 
-m = Main(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
-         analysis_type=analysis_type, system=system, hinge_model=hingeModel, flag3d=flag3d,
-         export_at_each_step=export_at_each_step, modal_analysis_path=modal_analysis_path, max_runs=max_runs)
+m = rcmrf(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
+          analysis_type=analysis_type, system=system, hinge_model=hingeModel, flag3d=flag3d,
+          export_at_each_step=export_at_each_step, modal_analysis_path=modal_analysis_path, max_runs=max_runs)
 
 m.wipe()
 m.run_model()

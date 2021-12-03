@@ -5,7 +5,7 @@ If MA.json exists, add to pushover folder, or give path as input
 """
 
 from pathlib import Path
-from main import Main
+from rcmrf import rcmrf
 import pickle
 
 from utils.utils import get_time, get_start_time
@@ -32,8 +32,8 @@ flag3d = True
 direction = 0
 period_assignment = {"x": 1, "y": 0}
 
-m = Main(section_file, loads_file, materials_file, outputsDir, analysis_type=analysis_type, flag3d=flag3d,
-         direction=direction, modal_analysis_path=modal_analysis_path, period_assignment=period_assignment)
+m = rcmrf(section_file, loads_file, materials_file, outputsDir, analysis_type=analysis_type, flag3d=flag3d,
+          direction=direction, modal_analysis_path=modal_analysis_path, period_assignment=period_assignment)
 
 m.wipe()
 m.run_model()
