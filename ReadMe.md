@@ -7,6 +7,8 @@ May use multiprocessing to carry out multiple stripe analysis (non-linear time h
 
 May be used in any os system.
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5753463.svg)](https://doi.org/10.5281/zenodo.5753463)
+
 **Required libraries**: requirements.txt
 
       python -m pip install -r requirements.txt
