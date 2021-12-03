@@ -7,7 +7,7 @@ import numpy as np
 
 
 class Recorders:
-    def __init__(self, geometry, elements, hingeModel='haselton', flag3d=False):
+    def __init__(self, geometry, elements, hingeModel='hysteretic', flag3d=False):
         """
         Initializing recorder generation
         :param geometry: Object                     Geometry object

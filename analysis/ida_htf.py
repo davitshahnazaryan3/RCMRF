@@ -12,8 +12,8 @@ from client.model import Model
 
 class IDA_HTF:
     def __init__(self, first_int, incr_step, max_runs, IM_type, T_info, xi, omegas, dt, dcap, nmsfile_x, nmsfile_y,
-                 dts_file, durs_file, gm_dir, analysis_type, sections_file, loads_file, materials, system='Perimeter',
-                 hingeModel='Haselton', pflag=True, flag3d=False):
+                 dts_file, durs_file, gm_dir, analysis_type, sections_file, loads_file, materials, system='space',
+                 hingeModel='hysteretic', pflag=True, flag3d=False):
         """
         Initializes IDA
         :param first_int: float                     The first intensity to run the elastic run (e.g. 0.05g)

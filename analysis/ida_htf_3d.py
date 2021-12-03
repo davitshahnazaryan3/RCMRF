@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pickle
 import os
+
 from analysis.solutionAlgorithm import SolutionAlgorithm
 from analysis.static import Static
 from client.model import Model
@@ -13,9 +14,9 @@ from utils.utils import read_text_file
 
 
 class IDA_HTF_3D:
-    def __init__(self, first_int, incr_step, max_runs, IM_type, T_info, xi, omegas, dt, dcap, nmsfile_x, nmsfile_y,
-                 dts_file, durs_file, gm_dir, analysis_type, sections_file, loads_file, materials, system='Perimeter',
-                 hingeModel='Haselton', pflag=True, flag3d=False, export_at_each_step=False):
+    def __init__(self, first_int, incr_step, max_runs, IM_type, T_info, xi, omegas, dt, dcap, gm_dir, gmfileNames,
+                 analysis_type, sections_file, loads_file, materials, system='space', hingeModel='hysteretic',
+                 pflag=True, flag3d=False, export_at_each_step=True):
         """
         Initializes IDA
         :param first_int: float                     The first intensity to run the elastic run (e.g. 0.05g)
@@ -34,10 +35,7 @@ class IDA_HTF_3D:
         :param omegas: list                         Circular frequences
         :param dt: float                            Analysis time step
         :param dcap: float                          Drift capacity in %
-        :param nmsfile_x: str                       Text file with names of the X direction records in the form "*.txt"
-        :param nmsfile_y: str                       Text file with names of the Y direction records in the form "*.txt"
-        :param dts_file: str                        Text file with the time steps of the records
-        :param durs_file: str                       Text file with the durations of the records
+        :param gmfileNames: List(str)               Filenames containing names_X, names_Y, dt
         :param gm_dir: str                          Directory containg the Ground Motions
         :param analysis_type, sections_file, loads_file, materials, system, hingeModel: See client\model.py
         :param pflag: bool                          Whether print information on screen or not
@@ -53,11 +51,13 @@ class IDA_HTF_3D:
         self.omegas = omegas
         self.dt = dt
         self.dcap = dcap
-        self.nmsfile_x = nmsfile_x
-        self.nmsfile_y = nmsfile_y
-        self.dts_file = dts_file
-        self.durs_file = durs_file
         self.gm_dir = gm_dir
+
+        # For IDA
+        self.nmsfile_x = gm_dir / gmfileNames[0]
+        self.nmsfile_y = gm_dir / gmfileNames[1]
+        self.dts_file = gm_dir / gmfileNames[2]
+
         self.g = 9.81
         self.EXTRA_DUR = 10.0
         self.analysis_type = analysis_type
@@ -77,12 +77,12 @@ class IDA_HTF_3D:
         # Initialize intensity measures
         self.IM_output = None
 
-    def call_model(self, generate_model=True):
+    def _call_model(self, generate_model=True):
         """
         Calls the Model
         Generates the model, defines gravity loads and defines time series
         :param generate_model: bool                         Generate model or not
-        :return: class                                      Object Model
+        :return: Model                                      Object Model
         """
         m = Model(self.analysis_type, self.sections_file, self.loads_file, self.materials, None, self.system,
                   self.hingeModel, flag3d=self.flag3d)
@@ -93,13 +93,13 @@ class IDA_HTF_3D:
             m.define_loads(m.elements, apply_point=False)
             # Run static analysis
             s = Static()
-            s.static_analysis(self.flag3d)
+            s.static_analysis(None, self.flag3d)
         return m
 
-    def get_IM(self, eq, dt, period, xi):
+    def _get_IM(self, accg, dt, period, xi):
         """
         Gets Sa(T) of a given record, for a specified value of period T using the Newmark Average Acceleration
-        :param eq: str                              Filename which is a single column file in units of g (e.g. "Eq.txt")
+        :param eq: list                             Accelerogram
         :param dt: float                            Time step in seconds (e.g. 0.01)
         :param period: float                        Period in seconds (e.g. 1.0)
         :param xi: float                            Elastic damping (e.g. 0.05)
@@ -108,9 +108,6 @@ class IDA_HTF_3D:
                                                     sd - spectral displacement in m
                                                     pga - peak ground acceleration in g
         """
-        # Read the acceleration time series
-        accg = read_text_file(eq)
-
         if period == 0.0:
             pga = 0.0
             for i in range(len(accg)):
@@ -191,7 +188,7 @@ class IDA_HTF_3D:
             sa = sd * w ** 2 / self.g
             return sd, sv, sa
 
-    def get_gm(self):
+    def _get_gm(self):
         """
         Gets ground motion information (i.e. names, time steps, durations)
         :return: lists                              List of names, time steps and durations of each record
@@ -199,10 +196,12 @@ class IDA_HTF_3D:
         eqnms_list_x = list(pd.read_csv(self.nmsfile_x, header=None)[0])
         eqnms_list_y = list(pd.read_csv(self.nmsfile_y, header=None)[0])
         dts_list = read_text_file(self.dts_file)
-        durs_list = read_text_file(self.durs_file)
-        return eqnms_list_x, eqnms_list_y, dts_list, durs_list
+        if not isinstance(dts_list, list):
+            dts_list = [float(dts_list)]
 
-    def time_series(self, dt, pathx, pathy, fx, fy):
+        return eqnms_list_x, eqnms_list_y, dts_list
+
+    def _time_series(self, dt, pathx, pathy, fx, fy):
         """
         Defines time series
         :param dt: float                            Time step of record
@@ -248,7 +247,7 @@ class IDA_HTF_3D:
             im_filename = output_dir.parents[0] / "IM.csv"
 
         # Get the ground motion set information
-        eqnms_list_x, eqnms_list_y, dts_list, durs_list = self.get_gm()
+        eqnms_list_x, eqnms_list_y, dts_list = self._get_gm()
         nrecs = len(dts_list)
 
         # Initialize intensity measures (shape)
@@ -262,14 +261,18 @@ class IDA_HTF_3D:
             eq_name_x = self.gm_dir / eqnms_list_x[rec]
             eq_name_y = self.gm_dir / eqnms_list_y[rec]
             dt = dts_list[rec]
-            dur = self.EXTRA_DUR + durs_list[rec]
+            accg_x = read_text_file(eq_name_x)
+            accg_y = read_text_file(eq_name_y)
+
+            dur = dt * (len(accg_x) - 1)
+            dur = self.EXTRA_DUR + dur
 
             # Establish the IM
             if self.IM_type == 1:
                 print('[IDA] IM is the PGA')
-                pga = self.get_IM(eq_name_x, dts_list[rec], 0.0, self.xi)
+                pga = self._get_IM(accg_x, dts_list[rec], 0.0, self.xi)
                 IMx = pga
-                pga = self.get_IM(eq_name_y, dts_list[rec], 0.0, self.xi)
+                pga = self._get_IM(accg_y, dts_list[rec], 0.0, self.xi)
                 IMy = pga
                 # Get the geometric mean
                 IM_geomean = np.power(IMx * IMy, 0.5)
@@ -285,9 +288,9 @@ class IDA_HTF_3D:
                     else:
                         Tcond_x = Tcond_y = self.T_info[0]
 
-                sd, sv, sa = self.get_IM(eq_name_x, dts_list[rec], Tcond_x, self.xi)
+                sd, sv, sa = self._get_IM(accg_x, dts_list[rec], Tcond_x, self.xi)
                 IMx = sa
-                sd, sv, sa = self.get_IM(eq_name_y, dts_list[rec], Tcond_y, self.xi)
+                sd, sv, sa = self._get_IM(accg_y, dts_list[rec], Tcond_y, self.xi)
                 IMy = sa
                 # Get the geometric mean
                 IM_geomean = np.power(IMx * IMy, 0.5)
@@ -326,8 +329,8 @@ class IDA_HTF_3D:
                         print(f"[IDA] IM = {IM[j - 1]}")
 
                     # The hunting intensity has been determined, now analysis commences
-                    m = self.call_model()
-                    self.time_series(dt, eq_name_x, eq_name_y, sf_x, sf_y)
+                    m = self._call_model()
+                    self._time_series(dt, eq_name_x, eq_name_y, sf_x, sf_y)
                     if self.pflag:
                         print(f"[IDA] Record: {rec + 1}; Run: {j}; IM: {IM[j - 1]}")
 
@@ -396,8 +399,8 @@ class IDA_HTF_3D:
                     run = f"Record{rec + 1}_Run{j}"
 
                     # The trace intensity has been determined, now we can analyse
-                    m = self.call_model()
-                    self.time_series(dt, eq_name_x, eq_name_y, sf_x, sf_y)
+                    m = self._call_model()
+                    self._time_series(dt, eq_name_x, eq_name_y, sf_x, sf_y)
                     if self.pflag:
                         print(f"[IDA] Record: {rec + 1}; Run: {j}; IM: {IMtr}")
 
@@ -457,8 +460,8 @@ class IDA_HTF_3D:
                     self.IM_output[rec, j-1] = IMfil
                     run = f"Record{rec + 1}_Run{j}"
 
-                    m = self.call_model()
-                    self.time_series(dt, eq_name_x, eq_name_y, sf_x, sf_y)
+                    m = self._call_model()
+                    self._time_series(dt, eq_name_x, eq_name_y, sf_x, sf_y)
                     if self.pflag:
                         print(f"[IDA] Record: {rec + 1}; Run: {j}; IM: {IMfil}")
 

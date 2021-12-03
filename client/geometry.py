@@ -18,6 +18,7 @@ class Geometry:
         self.hingeModel = hingeModel.lower()
         self.flag3d = flag3d
         self.direction = direction
+
         self.nst = None
         self.nbays = []
         self.heights = None
@@ -33,7 +34,8 @@ class Geometry:
                     selection = self.sections["x"]
                 else:
                     selection = self.sections["y"]
-                nst, nbays, heights, widths, beams, columns, bnode, tnode = self.generate_data(selection, i)
+
+                nst, nbays, heights, widths, beams, columns, bnode, tnode = self._generate_data(selection, i)
 
                 self.nbays.append(nbays)
                 self.widths.append(widths)
@@ -43,15 +45,17 @@ class Geometry:
                 self.tnode.append(tnode)
                 self.nst = nst
                 self.heights = heights
+
         else:
             self.nst, self.nbays, self.heights, self.widths, self.beams, self.columns, self.bnode, self.tnode = \
-                self.generate_data(self.sections, direction=self.direction)
+                self._generate_data(self.sections, direction=self.direction)
 
-    def generate_data(self, sections, direction):
+    def _generate_data(self, sections, direction):
         # Get the number of storeys and bays in the direction of seismic action
         if self.hingeModel == 'haselton':
             nst = max(sections['Storey'])
             nbays = int(len(sections[(sections['Element'] == 'Column')]) / nst - 1)
+
         else:
             nst = int(sections['Storey'].max())
             nbays = int(sections['Bay'].max() - 1)
@@ -70,12 +74,14 @@ class Geometry:
         for st in range(nst):
             heights = np.append(heights, heights[st] +
                                 columns[(columns['Storey'] == st + 1)].iloc[0]['length'])
+
             if self.hingeModel == 'haselton':
                 if st == 0:
                     bnode.append(int(f"{st + 1}{nbays + 1}00"))
                 else:
                     bnode.append(int(f"{st + 1}{nbays + 1}20"))
                 tnode.append(int(f"{st + 2}{nbays + 1}20"))
+
             elif self.hingeModel == 'hysteretic':
                 if self.flag3d:
                     if direction == 0:
@@ -87,6 +93,7 @@ class Geometry:
                 else:
                     bnode.append(int(f"{nbays + 1}{st}"))
                     tnode.append(int(f"{nbays + 1}{st + 1}"))
+
             else:
                 raise ValueError('[EXCEPTION] Wrong lumped hinge model (should be Hysteretic or Haselton)')
 
@@ -117,6 +124,7 @@ class Geometry:
             for st in range(self.nst + 1):
                 for bay in range(self.nbays + 1):
                     if self.hingeModel == 'haselton':
+                        # 4 nodes per panel zone
                         if st == 0:
                             df['Node id'].append(f"{st + 1}{bay + 1}00")
                             df['z'].append(self.heights[st])
@@ -124,6 +132,7 @@ class Geometry:
                             df['Node id'].append(f"{st + 1}{bay + 1}000")
                             df['z'].append(self.heights[st])
                             df['x'].append(self.widths[bay])
+
                         else:
                             beam_heights = np.array(self.beams['h'])
                             col_ext_heights = np.array(self.columns['h'][(self.columns['Position'] == 'External')])
@@ -139,6 +148,7 @@ class Geometry:
                                         df['x'].append(self.widths[bay] + col_ext_heights[(st - 1)] / 2)
                                     else:
                                         df['x'].append(self.widths[bay] + col_int_heights[(st - 1)] / 2)
+
                                     df['Node id'].append(f"{st + 1}{bay + 1}30")
                                     df['z'].append(self.heights[st] + beam_heights[(st - 1)] / 2)
                                     df['x'].append(self.widths[bay])
@@ -148,6 +158,7 @@ class Geometry:
                                         df['x'].append(self.widths[bay] - col_ext_heights[(st - 1)] / 2)
                                     else:
                                         df['x'].append(self.widths[bay] - col_int_heights[(st - 1)] / 2)
+
                                 except:
                                     raise ValueError('[EXCEPTION] Internal column cross-sections not provided!')
 

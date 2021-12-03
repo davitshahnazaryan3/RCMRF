@@ -1,11 +1,9 @@
 """
 Model creator of an RC MRF. Lumped hinge models following the recommendations of Haselton 2007 are used.
 """
-import os
 import openseespy.opensees as op
 import pandas as pd
-import json, pickle
-import numpy as np
+
 from client.geometry import Geometry
 from client.sections import Sections
 from client.recorders import Recorders
@@ -16,8 +14,8 @@ from utils.utils import *
 
 
 class ModelToTCL:
-    def __init__(self, analysis_type, sections_file, loads_file, materials, outputsDir, system='perimeter',
-                 hingeModel='haselton', flag3d=False, direction=0, tcl_filename=None):
+    def __init__(self, analysis_type, sections_file, loads_file, materials, outputsDir, system='space',
+                 hingeModel='hysteretic', flag3d=False, direction=0, tcl_filename=None):
         """
         Initializes OpenSees model creator
         :param analysis_type: list(str)             Type of analysis for which we are recording [TH, PO, ST, MA, ELF]
@@ -127,6 +125,8 @@ class ModelToTCL:
         Initiates model creation
         :return: None
         """
+        createFolder(self.outputsDir / "Models")
+
         if self.flag3d:
             op.model('Basic', '-ndm', 3, '-ndf', 6)
 
@@ -861,7 +861,7 @@ class ModelToTCL:
             self.file.write("\nwipe;")
 
             print('[STEP] Modal analysis started')
-            m = Modal(self.NUM_MODES, self.outputsDir, self.DAMP_MODES, damping)
+            m = Modal(self.NUM_MODES, self.DAMP_MODES, damping, self.outputsDir)
             self.results['Modal'], positions = self.set_recorders('MA', num_modes=self.NUM_MODES, lam=m.lam)
 
             # Modify positions of modal parameters

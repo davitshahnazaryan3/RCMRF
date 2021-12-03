@@ -21,8 +21,8 @@ class Sections:
         self.materials = materials
         self.UBIG = 1.0e10
 
-    def rot_spring_2d_modIKmodel(self, eleID, nodeR, nodeC, K, asPos, asNeg, MyPos, MyNeg, LS, LK, LA, LD, cS, cK, cA,
-                                 cD, th_pP, th_pN, th_pcP, th_pcN, ResP, ResN, th_uP, th_uN, DP, DN):
+    def _rot_spring_2d_modIKmodel(self, eleID, nodeR, nodeC, K, asPos, asNeg, MyPos, MyNeg, LS, LK, LA, LD, cS, cK, cA,
+                                  cD, th_pP, th_pN, th_pcP, th_pcN, ResP, ResN, th_uP, th_uN, DP, DN):
         """
         This routine creates a uniaxial material spring with deterioration
         Spring follows: Bilinear Response based on Modified Ibarra Krawinkler Deterioration Model
@@ -139,10 +139,10 @@ class Sections:
             eleID = 10001 + idx
             try:
                 nodeC = int(f"{nodeR}0")
-                self.rot_spring_2d_modIKmodel(eleID, nodeR, nodeC, k0, as_pos, as_neg, MyPos, MyNeg, gamma, gamma, 0.0,
-                                              0.0, c, c, c, c, theta_cap_plPos, theta_cap_plNeg, theta_pc, theta_pc,
-                                              res_strength, res_strength, theta_cap_totPos + theta_pc,
-                                              theta_cap_totNeg + theta_pc, D, D)
+                self._rot_spring_2d_modIKmodel(eleID, nodeR, nodeC, k0, as_pos, as_neg, MyPos, MyNeg, gamma, gamma, 0.0,
+                                               0.0, c, c, c, c, theta_cap_plPos, theta_cap_plNeg, theta_pc, theta_pc,
+                                               res_strength, res_strength, theta_cap_totPos + theta_pc,
+                                               theta_cap_totNeg + theta_pc, D, D)
             except TypeError:
                 print('[EXCEPTION] Master node ID not provided')
 

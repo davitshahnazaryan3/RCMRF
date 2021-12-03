@@ -6,28 +6,27 @@ import numpy as np
 
 
 class Modal:
-    def __init__(self, num_modes, path, damp_modes=None, damping=0.05, export_to_tcl=True):
+    def __init__(self, num_modes, damp_modes=None, damping=0.05, path=None):
         """
         Initializes modal analysis
         :param num_modes: int                   Number of modes of interest
         :param damp_modes: list(int)            2 element List of damping modes (e.g. [1, 3])
         :param damping: float                   Ratio of critical damping to be applied to the listed modes
-        :param export_to_tcl: bool              Exporting
+        :param path: bool                       Exporting Model to path
         """
         self.num_modes = num_modes
         self.path = path
         self.damp_modes = damp_modes
         self.damping = damping
-        self.export_to_tcl = export_to_tcl
-        self.lam = self.compute_eigenvectors()
-        self.record_stuff()
-        self.omega, self.freq, self.period = self.extract_eigenvalues(self.lam)
+        self.lam = self._compute_eigenvectors()
+        self._record_stuff()
+        self.omega, self.freq, self.period = self._extract_eigenvalues(self.lam)
 
-        self.xi_modes = self.get_damping(self.omega)
+        self.xi_modes = self._get_damping(self.omega)
 
         self.file = None
 
-    def compute_eigenvectors(self):
+    def _compute_eigenvectors(self):
         """
         Computes eigen values
         :return: float                          Eigenvalue
@@ -52,7 +51,7 @@ class Modal:
                         print('[EXCEPTION] Eigensolver failed.')
 
         # Write to file
-        if self.export_to_tcl:
+        if self.path:
             self.file = open(self.path / "Models/modal_analysis.tcl", "w+")
             self.file.write("# Modal analysis procedure")
             self.file.write("\n# Solve for lambda")
@@ -80,14 +79,14 @@ class Modal:
         return lam
 
     @staticmethod
-    def record_stuff():
+    def _record_stuff():
         """
         Records the eigenvectors
-        :return:
+        :return: None
         """
         op.record()
 
-    def extract_eigenvalues(self, lam):
+    def _extract_eigenvalues(self, lam):
         """
         Extracts eigenvalues to appropriate arrays
         :param lam: float                       Eigenvalue
@@ -102,7 +101,7 @@ class Modal:
             period.append(2 * np.pi / np.sqrt(lam[m]))
 
         # write to file
-        if self.export_to_tcl:
+        if self.path:
             self.file.write("\n\n# Extract the eigenvalues to the appropriate arrays")
             self.file.write("\nset omega {};")
             self.file.write("\nset freq {};")
@@ -117,7 +116,7 @@ class Modal:
 
         return omega, freq, period
 
-    def get_damping(self, omega):
+    def _get_damping(self, omega):
         """
         Computes Rayleigh damping
         :param omega: list                      List of circular frequencies

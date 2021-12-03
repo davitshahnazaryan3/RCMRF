@@ -72,3 +72,8 @@ def export_to(filepath, data, filetype):
             json.dump(data, json_file)
     elif filetype == "csv":
         data.to_csv(f"{filepath}.csv", index=False)
+
+
+def tuple_to_dict(data):
+    out = dict((i, d) for i, d in enumerate(data))
+    return out

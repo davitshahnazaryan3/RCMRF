@@ -11,13 +11,15 @@ class SPO:
         """
         Initialize static pushover definition
         :param cntr_node: int                       Node to control with displacement integrator
-        :param disp_dir: int                        DOF the loading is applied
-        :param base_cols: list(str)                 Base column IDs
+        :param disp_dir: int                        DOF the loading is applied to
+        :param base_cols: List(str)                 Base column IDs
         :param dref: float                          Reference displacement to which cycles are run. Corresponds to yield
-                                                    or equivalent other, such as 1mm (in m)
+                                                    or equivalent, such as 1mm (in m)
         :param nstep: int                           Number of steps
         :param flag3d: bool                         True for 3D modelling, False for 2D modelling
-        :param direction: int
+        :param direction: int                       0 for X and 1 for Y
+        :param filename: Path
+        :param site: Path
         """
         self.TOL = 1e-08
         self.ITERINIT = 10
@@ -82,6 +84,7 @@ class SPO:
             self.file.write("\n\n# Define load shape")
             self.file.write("\npattern Plain 4 Linear {")
 
+        # Load pattern
         op.timeSeries('Linear', 4)
         op.pattern('Plain', 400, 4)
         if self.flag3d:
@@ -153,7 +156,11 @@ class SPO:
                             f"{0.1 * heights[-1] / self.nstep};")
             self.file.write("\nanalysis Static;")
 
-    def spo_recorders(self):
+    def _spo_recorders(self):
+        """
+        Initializes SPO recorders for the .tcl file
+        :return: None
+        """
         file = open(self.recorder_name, "w+")
 
         for node in self.base_nodes:
@@ -167,7 +174,7 @@ class SPO:
         :return: ndarrays                           Top displacement vs Base shear
         """
         if self.filename:
-            self.spo_recorders()
+            self._spo_recorders()
 
         # It happens so, that column shear ID matches the disp_dir ID, they are not the same thing
         col_shear_idx = self.disp_dir
@@ -189,11 +196,13 @@ class SPO:
         while step <= self.nstep and ok == 0 and loadf > 0:
             ok = op.analyze(1)
             loadf = op.getTime()
+
             if ok != 0:
                 print('[STEP] Trying relaxed convergence...')
                 op.test(self.TEST_TYPE, self.TOL * 0.01, int(self.ITERINIT * 50))
                 ok = op.analyze(1)
                 op.test(self.TEST_TYPE, self.TOL, self.ITERINIT)
+
             if ok != 0:
                 print('[STEP] Trying Newton with initial then current...')
                 op.test(self.TEST_TYPE, self.TOL * 0.01, int(self.ITERINIT * 50))
@@ -201,6 +210,7 @@ class SPO:
                 ok = op.analyze(1)
                 op.algorithm(self.ALGORITHM_TYPE)
                 op.test(self.TEST_TYPE, self.TOL, self.ITERINIT)
+
             if ok != 0:
                 print('[STEP] Trying ModifiedNewton with initial...')
                 op.test(self.TEST_TYPE, self.TOL * 0.01, int(self.ITERINIT * 50))
@@ -208,6 +218,7 @@ class SPO:
                 ok = op.analyze(1)
                 op.algorithm(self.ALGORITHM_TYPE)
                 op.test(self.TEST_TYPE, self.TOL, self.ITERINIT)
+
             if ok != 0:
                 print('[STEP] Trying KrylovNewton...')
                 op.test(self.TEST_TYPE, self.TOL * 0.01, int(self.ITERINIT * 50))
@@ -215,6 +226,7 @@ class SPO:
                 ok = op.analyze(1)
                 op.algorithm(self.ALGORITHM_TYPE)
                 op.test(self.TEST_TYPE, self.TOL, self.ITERINIT)
+
             if ok != 0:
                 print('[STEP] Perform a Hail Mary...')
                 op.test('FixedNumIter', self.ITERINIT)
@@ -244,7 +256,6 @@ class SPO:
             print(f"[FAILURE] Stopped because of load factor below zero: {loadf}")
 
         # Write to file
-
         if self.filename:
             self.file.write("\n\nset ok 0;")
             self.file.write("\nset step 1;")

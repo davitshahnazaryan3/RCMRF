@@ -6,12 +6,12 @@ import openseespy.opensees as op
 
 class Static:
     NSTEP = 1
-    TOL = 1e-08
+    TOL = 1.e-08
 
-    def static_analysis(self, path, flag3d=False):
+    def static_analysis(self, path=None, flag3d=False):
         """
         Starts static analysis
-        :param path: str
+        :param path: Path
         :param flag3d: bool
         :return: None
         """
