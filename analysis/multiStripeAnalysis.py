@@ -1,19 +1,21 @@
 import multiprocessing as mp
-
 import openseespy.opensees as op
-import numpy as np
 import pandas as pd
 import os
+
 from analysis.solutionAlgorithm import SolutionAlgorithm
 from analysis.static import Static
 from client.model import Model
 from utils.utils import read_text_file, createFolder, export_to
 
 
-def get_ground_motion(path):
-    names_x = list(pd.read_csv(path / "GMR_H1_names.txt", header=None)[0])
-    names_y = list(pd.read_csv(path / "GMR_H2_names.txt", header=None)[0])
-    dts_list = read_text_file(path / "GMR_dts.txt")
+def get_ground_motion(path, gmfileNames):
+    names_x = list(pd.read_csv(path / gmfileNames[0], header=None)[0])
+    names_y = list(pd.read_csv(path / gmfileNames[1], header=None)[0])
+    dts_list = read_text_file(path / gmfileNames[2])
+    if not isinstance(dts_list, list):
+        dts_list = [float(dts_list)]
+
     return names_x, names_y, dts_list
 
 
@@ -21,7 +23,7 @@ def get_ground_motion_batches(gm_dir):
     return next(os.walk(gm_dir))[1]
 
 
-def get_records(gm_dir, output_dir):
+def get_records(gm_dir, output_dir, gmfileNames):
     """
     Gets records for multiprocessing
     :param gm_dir: str
@@ -39,7 +41,7 @@ def get_records(gm_dir, output_dir):
         createFolder(output_dir / path)
 
         # Get the ground motion information
-        names_x, names_y, dts_list = get_ground_motion(gm_dir / path)
+        names_x, names_y, dts_list = get_ground_motion(gm_dir / path, gmfileNames)
         records[path] = {"X": names_x, "Y": names_y, "dt": dts_list}
 
     return records
@@ -47,8 +49,25 @@ def get_records(gm_dir, output_dir):
 
 class MultiStripeAnalysis:
     def __init__(self, sections_file, loads_file, materials, gm_dir, damping, omegas, output_path,
-                 analysis_time_step=0.01, drift_capacity=10., system="perimeter", hingeModel="haselton", flag3d=False,
+                 analysis_time_step=0.01, drift_capacity=10., system="space", hingeModel="hysteretic", flag3d=False,
                  export_at_each_step=True, pflag=True):
+        """
+        Initialize
+        :param sections_file: Path or dict
+        :param loads_file: Path
+        :param materials: Path
+        :param gm_dir: Path
+        :param damping: float
+        :param omegas: List(float)
+        :param output_path: Path
+        :param analysis_time_step: float
+        :param drift_capacity: float
+        :param system: str
+        :param hingeModel: str
+        :param flag3d: bool
+        :param export_at_each_step: bool
+        :param pflag: bool
+        """
         self.sections_file = sections_file
         self.loads_file = loads_file
         self.materials = materials
@@ -74,9 +93,8 @@ class MultiStripeAnalysis:
 
         # Storing results
         self.outputs = {}
-        self.IM_output = {}
 
-    def call_model(self, generate_model=True):
+    def _call_model(self, generate_model=True):
         """
         Calls the Model
         Generates the model, defines gravity loads and defines time series
@@ -95,7 +113,7 @@ class MultiStripeAnalysis:
             s.static_analysis(None, self.flag3d)
         return m
 
-    def time_series(self, dt, pathx, pathy, fx, fy):
+    def _time_series(self, dt, pathx, pathy, fx, fy):
         """
         Defines time series
         :param dt: float                            Time step of record
@@ -103,8 +121,13 @@ class MultiStripeAnalysis:
         :param pathy: str                           Path to record of y direction
         :param fx: float                            Scaling factor in x direction
         :param fy: float                            Scaling factor in y direction
-        :return:
+        :return: None
         """
+        # # Eigen value analysis
+        # eigen_values = np.asarray(op.eigen(max(self.damping)))
+        # omega = eigen_values ** 0.5
+        # periods = 2 * np.pi / omega
+
         # Delete the old analysis and all it's component objects
         op.wipeAnalysis()
 
@@ -129,9 +152,18 @@ class MultiStripeAnalysis:
         op.numberer('RCM')
         op.system('UmfPack')
 
-    def start_process(self, records):
+    def start_process(self, records, workers=0):
+        """
+        Start the parallel computation
+        :param records: dict
+        :param workers: int
+        :return: None
+        """
         # Get number of CPUs available
-        workers = mp.cpu_count()
+        if workers == 0:
+            workers = mp.cpu_count()
+        if workers > 0:
+            workers = workers + 1
 
         with mp.Pool(workers - 1) as pool:
             outputs = pool.imap(self.run_msa, list(records.items()))
@@ -140,6 +172,11 @@ class MultiStripeAnalysis:
                 print("[SUCCESS]")
 
     def run_msa(self, item):
+        """
+        Records
+        :param item: List(str, dict)
+        :return: dict
+        """
         name, data = item
         print(f"[START] Running {name} records...")
 
@@ -161,10 +198,10 @@ class MultiStripeAnalysis:
             dur = self.EXTRA_DUR + dt * len(accg_x)
 
             # Create the model
-            m = self.call_model()
+            m = self._call_model()
 
             # Create the time series
-            self.time_series(dt, eq_name_x, eq_name_y, 1, 1)
+            self._time_series(dt, eq_name_x, eq_name_y, 1, 1)
 
             if self.pflag:
                 print(f"[MSA] Record: {rec} - {name}: {names_x[rec]} and {names_y[rec]} pair;")

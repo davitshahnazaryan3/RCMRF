@@ -3,15 +3,17 @@ Performs nonlinear time history analysis
 Displacements are in m
 Accelerations are in g
 Drifts are in %
+NLRHA = Non-linear response history analysis
 """
 import openseespy.opensees as op
-import numpy as np, warnings
+import numpy as np
+import warnings
 
 
 class SolutionAlgorithm:
     def __init__(self, dt, tmax, dc, tnode, bnode, pflag=True, flag3d=False):
         """
-        Procedure to execute the NRHA of a 2D model
+        Procedure to execute the NLRHA of a 2D model
         :param dt: float                            Analysis time step
         :param tmax: float                          Length of the record (including padding of 0's)
         :param dc: float                            Drift capacity for both storey and roof drift (%)
@@ -43,10 +45,10 @@ class SolutionAlgorithm:
         self.ITER = 50
         self.ALGORITHM_TYPE = 'KrylovNewton'
         self.c_index = 0
-        self.set_analysis()
-        self.ntha_results = self.seek_solution()
+        self._set_analysis()
+        self.ntha_results = self._seek_solution()
 
-    def set_analysis(self):
+    def _set_analysis(self):
         """
         Sets up initial analysis parameters
         :return: None
@@ -56,7 +58,13 @@ class SolutionAlgorithm:
         op.integrator('Newmark', 0.5, 0.25)
         op.analysis('Transient')
 
-    def call_algorithms(self, ok, control_time):
+    def _call_algorithms(self, ok, control_time):
+        """
+        Calls algorithms
+        :param ok: int
+        :param control_time: float
+        :return: None
+        """
         if ok != 0:
             if self.pflag:
                 print(f"[FAILURE] Failed at {control_time} of {self.tmax} seconds")
@@ -129,7 +137,7 @@ class SolutionAlgorithm:
                 print(f"[FAILURE] Failed at {control_time} - exit analysis...")
             self.c_index = -1
 
-    def seek_solution(self):
+    def _seek_solution(self):
         """
         Performs the analysis and tries to find a converging solution
         :return: ndarrays                           Accelerations, displacements and storey drifts
@@ -179,7 +187,7 @@ class SolutionAlgorithm:
 
             # If the analysis fails, try the following changes to achieve convergence
             # Analysis will be slower in here though...
-            self.call_algorithms(ok, control_time)
+            self._call_algorithms(ok, control_time)
 
             # Recorders
             tempAccel = np.zeros((d, nst + 1, 1))

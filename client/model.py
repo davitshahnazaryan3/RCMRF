@@ -1,9 +1,6 @@
 """
 Model creator of an RC MRF. Lumped hinge models following the recommendations of Haselton 2007 are used.
 """
-import json
-import pickle
-
 import openseespy.opensees as op
 import pandas as pd
 
@@ -17,8 +14,8 @@ from utils.utils import *
 
 
 class Model:
-    def __init__(self, analysis_type, sections_file, loads_file, materials, outputsDir, system='perimeter',
-                 hingeModel='haselton', flag3d=False, direction=0):
+    def __init__(self, analysis_type, sections_file, loads_file, materials, outputsDir, system='space',
+                 hingeModel='hysteretic', flag3d=False, direction=0):
         """
         Initializes OpenSees model creator
         :param analysis_type: list(str)             Type of analysis for which we are recording [TH, PO, ST, MA, ELF]
@@ -118,7 +115,7 @@ class Model:
         self.DAMP_MODES = [1, 2]
         self.results = {}
 
-    def create_model(self):
+    def _create_model(self):
         """
         Initiates model creation
         :return: None
@@ -129,7 +126,7 @@ class Model:
             op.model('Basic', '-ndm', 2, '-ndf', 3)
         print('[INITIATE] Model generation started')
 
-    def create_nodes(self, fixity='fixed'):
+    def _create_nodes(self, fixity='fixed'):
         """
         Creates nodes
         :param fixity: str                          Boundary condition of base nodes
@@ -206,7 +203,7 @@ class Model:
 
         return base_nodes, hinge_nodes
 
-    def define_transformations(self, col_transf_type='PDelta', beam_transf_tag='PDelta'):
+    def _define_transformations(self, col_transf_type='PDelta', beam_transf_tag='PDelta'):
         """
         Defines geometric transformations for beams and columns (PDelta, Linear, Corotational)
         :param col_transf_type: str                 Column transformation type
@@ -232,7 +229,7 @@ class Model:
 
         print('[SUCCESS] Material Properties have been defined')
 
-    def joint_materials(self):
+    def _joint_materials(self):
         """
         Defines joint materials
         :return: None
@@ -244,7 +241,7 @@ class Model:
 
         print('[SUCCESS] Joint material properties have been defined')
 
-    def rot_springs(self, base_nodes):
+    def _rot_springs(self, base_nodes):
         """
         Defines rotational springs at the base of the structure
         :param base_nodes: list                     Base node IDs
@@ -258,7 +255,7 @@ class Model:
 
         print('[SUCCESS] Rotational springs have been defined')
 
-    def bilin_springs(self, nodes):
+    def _bilin_springs(self, nodes):
         """
         Defines bilinear springs for the plastic hinges of the structure
         :param nodes: list                          List of the node IDs
@@ -291,7 +288,7 @@ class Model:
 
         print('[SUCCESS] Bilinear springs have been defined')
 
-    def create_elements(self):
+    def _create_elements(self):
         """
         Creates elastic beam column elements
         :return: dict                                   Dictionary containing all element IDs
@@ -343,7 +340,7 @@ class Model:
         print('[SUCCESS] Elements have been defined')
         return elements, base_cols
 
-    def create_joints(self):
+    def _create_joints(self):
         """
         Creates Joint elements
         :return: None
@@ -373,7 +370,7 @@ class Model:
 
         print('[SUCCESS] Element connectivity and joint elements have been defined')
 
-    def define_pdelta_columns(self, option='Truss'):
+    def _define_pdelta_columns(self, option='Truss'):
         """
         Defines pdelta columns
         :param option: str                              Option for linking the gravity columns (Truss or EqualDOF)
@@ -774,8 +771,7 @@ class Model:
 
             filepath = self.outputsDir / 'ST'
 
-            with open(f"{filepath}.json", 'w') as (f):
-                json.dump(self.results['Gravity'], f)
+            export_to(filepath, self.results['Gravity'], "json")
 
             print('[SUCCESS] Static gravity analysis done')
 
@@ -799,8 +795,7 @@ class Model:
             self.results['Modal']['CircFreq'] = omega
 
             filepath = self.outputsDir / 'MA'
-            with open(f"{filepath}.json", 'w') as (f):
-                json.dump(self.results['Modal'], f)
+            export_to(filepath, self.results['Modal'], "json")
 
             print('[SUCCESS] Modal analysis done')
             mode_shape = self.results['Modal']['Mode1']
@@ -844,13 +839,12 @@ class Model:
             spo.load_pattern(control_nodes, load_pattern=spo_pattern, heights=self.g.heights, mode_shape=mode_shape,
                              nbays_x=nbays_x, nbays_y=nbays_y)
             spo.set_analysis(heights=self.g.heights)
-            outputs = spo.seek_solution()
+            outputs = np.array(spo.seek_solution())
             filepath = self.outputsDir / 'SPO'
-            with open(f"{filepath}.pickle", 'wb') as (f):
-                pickle.dump(outputs, f)
+            export_to(filepath, outputs.tolist(), "json")
             print('[SUCCESS] Static pushover analysis done')
 
-    def lumped_hinge_element(self):
+    def _lumped_hinge_element(self):
         """
         Creates lumped hinge elements for the hysteretic model
         :return: dict                       Dictionary containing element IDs to be used for recording internal forces
@@ -978,7 +972,7 @@ class Model:
 
         return elements, base_cols
 
-    def rigid_diaphragm(self):
+    def _rigid_diaphragm(self):
         nbays_x = max(self.sections["x"]["Bay"] - 1)
         nbays_y = max(self.sections["y"]["Bay"] - 1)
         # Define Rigid floor diaphragm
@@ -1000,24 +994,24 @@ class Model:
         Creates the full model
         :return: None
         """
-        self.create_model()
-        self.define_transformations()
-        self.base_nodes, hinge_nodes = self.create_nodes()
+        self._create_model()
+        self._define_transformations()
+        self.base_nodes, hinge_nodes = self._create_nodes()
         if self.hingeModel == 'haselton':
-            self.joint_materials()
-            self.rot_springs(self.base_nodes)
-            self.bilin_springs(hinge_nodes)
-            self.elements, self.base_cols = self.create_elements()
-            self.create_joints()
+            self._joint_materials()
+            self._rot_springs(self.base_nodes)
+            self._bilin_springs(hinge_nodes)
+            self.elements, self.base_cols = self._create_elements()
+            self._create_joints()
         elif self.hingeModel == 'hysteretic':
-            self.elements, self.base_cols = self.lumped_hinge_element()
+            self.elements, self.base_cols = self._lumped_hinge_element()
         else:
             raise ValueError('[EXCEPTION] Wrong lumped hinge model (should be Hysteretic or Haselton)')
 
         if not self.flag3d:
             # Required only for 2D modelling
-            self.define_pdelta_columns(option='EqualDOF')
+            self._define_pdelta_columns(option='EqualDOF')
         else:
-            self.rigid_diaphragm()
+            self._rigid_diaphragm()
 
         self.define_masses()

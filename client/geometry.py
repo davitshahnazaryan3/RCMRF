@@ -33,7 +33,7 @@ class Geometry:
                     selection = self.sections["x"]
                 else:
                     selection = self.sections["y"]
-                nst, nbays, heights, widths, beams, columns, bnode, tnode = self.generate_data(selection, i)
+                nst, nbays, heights, widths, beams, columns, bnode, tnode = self._generate_data(selection, i)
 
                 self.nbays.append(nbays)
                 self.widths.append(widths)
@@ -45,9 +45,9 @@ class Geometry:
                 self.heights = heights
         else:
             self.nst, self.nbays, self.heights, self.widths, self.beams, self.columns, self.bnode, self.tnode = \
-                self.generate_data(self.sections, direction=self.direction)
+                self._generate_data(self.sections, direction=self.direction)
 
-    def generate_data(self, sections, direction):
+    def _generate_data(self, sections, direction):
         # Get the number of storeys and bays in the direction of seismic action
         if self.hingeModel == 'haselton':
             nst = max(sections['Storey'])
