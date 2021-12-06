@@ -25,7 +25,7 @@ with open(section_file, "rb") as f:
     section_file = pickle.load(f)
 
 # GM directory
-gmdir = main_dir / "records/gm_ida"
+gmdir = main_dir / "gm_ida"
 
 gmfileNames = ["GMR_names1.txt", "GMR_names2.txt", "GMR_dts.txt"]
 

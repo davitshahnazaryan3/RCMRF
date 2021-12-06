@@ -1,6 +1,7 @@
 import multiprocessing as mp
 import openseespy.opensees as op
 import pandas as pd
+import numpy as np
 import os
 
 from analysis.solutionAlgorithm import SolutionAlgorithm
@@ -13,8 +14,11 @@ def get_ground_motion(path, gmfileNames):
     names_x = list(pd.read_csv(path / gmfileNames[0], header=None)[0])
     names_y = list(pd.read_csv(path / gmfileNames[1], header=None)[0])
     dts_list = read_text_file(path / gmfileNames[2])
-    if not isinstance(dts_list, list):
+
+    try:
         dts_list = [float(dts_list)]
+    except:
+        dts_list = list(dts_list)
 
     return names_x, names_y, dts_list
 
@@ -124,9 +128,10 @@ class MultiStripeAnalysis:
         :return: None
         """
         # # Eigen value analysis
-        # eigen_values = np.asarray(op.eigen(max(self.damping)))
-        # omega = eigen_values ** 0.5
-        # periods = 2 * np.pi / omega
+        eigen_values = np.asarray(op.eigen(2))
+        omega = eigen_values ** 0.5
+        periods = 2 * np.pi / omega
+        self.omegas = omega
 
         # Delete the old analysis and all it's component objects
         op.wipeAnalysis()
