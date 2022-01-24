@@ -7,7 +7,7 @@ main = Path.cwd()
 push_dir = main / "outputs/pushover"
 create_folder(push_dir / "figs")
 
-f = push_dir / "SPO.json"
+f = push_dir / "SPO_x.json"
 spo_model = f
 
 # Labels if multiple graphs in one figure

@@ -35,6 +35,7 @@ class SPO:
         self.ALGORITHM_TYPE = 'KrylovNewton'
         self.NEGLIGIBLE = 1.e-09
         d = "x" if direction == 0 else "y"
+        self.sectionForces = {}
 
         if filename and site:
             self.recorder_name = filename / f"spo_recorders_{d}_{site}.tcl"
@@ -234,10 +235,25 @@ class SPO:
 
             # Recording the displacements and base shear forces
             topDisp = np.append(topDisp, op.nodeResponse(self.cntr_node, self.disp_dir, 1))
+            # topDisp = np.append(topDisp, op.nodeDisp(self.cntr_node, self.disp_dir))
+
             eleForceTemp = 0.0
             for col in self.base_cols:
                 eleForceTemp += op.eleForce(int(col), col_shear_idx)
             baseShear = np.append(baseShear, eleForceTemp)
+
+            eleList = op.getEleTags()
+            for ele in eleList:
+                if ele not in self.sectionForces:
+                    if self.direction == 0:
+                        self.sectionForces[ele] = [max(abs(op.eleForce(ele, 5)), abs(op.eleForce(ele, 11)))]
+                    else:
+                        self.sectionForces[ele] = [max(abs(op.eleForce(ele, 4)), abs(op.eleForce(ele, 10)))]
+                else:
+                    if self.direction == 0:
+                        self.sectionForces[ele].append(max(abs(op.eleForce(ele, 5)), abs(op.eleForce(ele, 11))))
+                    else:
+                        self.sectionForces[ele].append(max(abs(op.eleForce(ele, 4)), abs(op.eleForce(ele, 10))))
 
             loadf = op.getTime()
             step += 1

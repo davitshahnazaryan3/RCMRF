@@ -9,7 +9,7 @@ processors.
 
 from pathlib import Path
 
-from rcmrf import rcmrf
+from rcmrf import RCMRF
 import pickle
 
 from utils.utils import get_time, get_start_time
@@ -34,7 +34,7 @@ if __name__ == "__main__":
         section_file = pickle.load(f)
 
     # GM directory
-    gmdir = main_dir / "records"
+    gmdir = main_dir / "record_tem"
 
     # The naming convention must be the same for each intensity levels
     gmfileNames = ["GMR_H1_names.txt", "GMR_H2_names.txt", "GMR_dts.txt"]
@@ -48,7 +48,7 @@ if __name__ == "__main__":
     analysis_time_step = 0.01
     period_assignment = {"x": 1, "y": 0}
 
-    m = rcmrf(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, modal_analysis_path=modal_analysis_path,
+    m = RCMRF(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, modal_analysis_path=modal_analysis_path,
               analysis_type=analysis_type, system=system, hinge_model=hingeModel, flag3d=flag3d, gmfileNames=gmfileNames,
               export_at_each_step=export_at_each_step, analysis_time_step=analysis_time_step,
               period_assignment=period_assignment)
@@ -64,7 +64,7 @@ if __name__ == "__main__":
                                   export_at_each_step=export_at_each_step, pflag=True,
                                   analysis_time_step=analysis_time_step, drift_capacity=10.)
 
-        msa.start_process(m.records)
+        msa.start_process(m.records, 1)
 
     # Wipe the model
     m.wipe()

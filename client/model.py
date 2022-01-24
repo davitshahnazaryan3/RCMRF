@@ -515,7 +515,7 @@ class Model:
                                             spans_y[ybay - 2] + spans_y[ybay - 1]) / 4
 
                         # Mass based on tributary area
-                        q = self.loads[(self.loads["Pattern"] == "q") & (self.loads["Storey"] == st)]["Load"].iloc[0]
+                        q = self.loads[(self.loads["Pattern"] == "seismic") & (self.loads["Storey"] == st)]["Load"].iloc[0]
                         mass = area * q / 9.81
                         op.mass(nodetag, mass, mass, mass, self.NEGLIGIBLE, self.NEGLIGIBLE, self.NEGLIGIBLE)
 
@@ -842,6 +842,7 @@ class Model:
             outputs = np.array(spo.seek_solution())
             filepath = self.outputsDir / 'SPO'
             export_to(filepath, outputs.tolist(), "json")
+            # export_to(self.outputsDir / "sectionForces", spo.sectionForces, "pickle")
             print('[SUCCESS] Static pushover analysis done')
 
     def _lumped_hinge_element(self):
@@ -863,6 +864,8 @@ class Model:
             hinge_x = self.sections["x"]
             hinge_y = self.sections["y"]
             hinge_gr = self.sections["gravity"]
+
+            element_tags_my = {}
 
             # Add column elements
             for xbay in range(1, int(nbays_x + 2)):
@@ -901,6 +904,7 @@ class Model:
                         if st == 1:
                             base_cols.append(et)
                         s.hysteretic_hinges(et, inode, jnode, eleHinge, transfTag, self.flag3d, None)
+                        element_tags_my[et] = eleHinge["m1"]
 
             # Add beam elements in X direction
             for ybay in range(1, int(nbays_y + 2)):
@@ -925,6 +929,7 @@ class Model:
                                                 & (hinge_gr["Direction"] == 0)].reset_index(drop=True).iloc[0]
                             elements["Beams"]["gravity_x"].append(et)
                         s.hysteretic_hinges(et, inode, jnode, eleHinge, transfTag, self.flag3d, None)
+                        element_tags_my[et] = eleHinge["m1"]
 
             # Add beam elements in Y direction
             for xbay in range(1, int(nbays_x + 2)):
@@ -948,6 +953,9 @@ class Model:
                                                 & (hinge_gr["Direction"] == 1)].reset_index(drop=True).iloc[0]
                             elements["Beams"]["gravity_y"].append(et)
                         s.hysteretic_hinges(et, inode, jnode, eleHinge, transfTag, self.flag3d, None)
+                        element_tags_my[et] = eleHinge["m1"]
+
+            # export_to(self.outputsDir / "element_tags_my", element_tags_my, 'pickle')
 
         else:
             # Initialize elements

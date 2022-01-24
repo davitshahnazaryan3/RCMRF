@@ -3,7 +3,7 @@ Performs static pushover analysis for a 2D RC MRF using Haselton plastic hinge m
 """
 
 from pathlib import Path
-from rcmrf import rcmrf
+from rcmrf import RCMRF
 
 from utils.utils import get_time, get_start_time
 
@@ -26,7 +26,7 @@ hingeModel = "Haselton"
 analysis_type = ["PO"]
 flag3d = False
 
-m = rcmrf(section_file, loads_file, materials_file, outputsDir, analysis_type=analysis_type, hinge_model=hingeModel,
+m = RCMRF(section_file, loads_file, materials_file, outputsDir, analysis_type=analysis_type, hinge_model=hingeModel,
           flag3d=flag3d)
 
 m.wipe()

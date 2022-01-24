@@ -5,13 +5,15 @@ Accelerations are in g
 Drifts are in %
 NLRHA = Non-linear response history analysis
 """
+from scipy.interpolate import interp1d
 import openseespy.opensees as op
 import numpy as np
 import warnings
 
 
 class SolutionAlgorithm:
-    def __init__(self, dt, tmax, dc, tnode, bnode, pflag=True, flag3d=False):
+    def __init__(self, dt, tmax, dc, tnode, bnode, dt_gm=None, eq_x=None, eq_y=None, f_x=1., f_y=1.,
+                 pflag=True, flag3d=False):
         """
         Procedure to execute the NLRHA of a 2D model
         :param dt: float                            Analysis time step
@@ -19,9 +21,19 @@ class SolutionAlgorithm:
         :param dc: float                            Drift capacity for both storey and roof drift (%)
         :param tnode: list(int)                     List of top nodes
         :param bnode: list(int)                     List of bottom nodes
+        :param dt_gm: float
+        :param eq_x: list
+        :param eq_y: list
+        :param f_x: float
+        :param f_y: float
         :param pflag: bool                          Whether print information on screen or not
         :param flag3d: bool                         True for 3D modelling, False for 2D modelling
         """
+        self.dt_gm = dt_gm
+        self.eq_x = eq_x
+        self.eq_y = eq_y
+        self.f_x = f_x
+        self.f_y = f_y
         self.dt = dt
         self.tmax = tmax
         self.dc = dc
@@ -45,8 +57,41 @@ class SolutionAlgorithm:
         self.ITER = 50
         self.ALGORITHM_TYPE = 'KrylovNewton'
         self.c_index = 0
+        self.int_x, self.int_y = self._create_interpolation_functions_for_accelerations()
         self._set_analysis()
         self.ntha_results = self._seek_solution()
+
+    def _create_interpolation_functions_for_accelerations(self):
+
+        # Generate 0s to the end of eq_x and eq_y
+        count_zero = int((self.tmax - len(self.eq_x) * self.dt_gm) / self.dt_gm)
+        eq_x = self.eq_x * self.f_x
+        eq_y = self.eq_y * self.f_y
+
+        # eq_x = np.append(self.eq_x * self.f_x, np.zeros(count_zero))
+        # eq_y = np.append(self.eq_y * self.f_x, np.zeros(count_zero))
+
+        # Create time history
+        time_history = np.linspace(self.dt_gm, round(self.tmax - 10 + self.dt_gm, 5),
+                                   int(round((self.tmax - 10) / self.dt_gm, 0)))
+
+        function_x = interp1d(time_history, eq_x, bounds_error=False, fill_value=0)
+        function_y = interp1d(time_history, eq_y, bounds_error=False, fill_value=0)
+
+        # try:
+        #     # Create time history
+        #     time_history = np.arange(self.dt_gm, self.tmax - 10 + self.dt_gm, self.dt_gm)
+        #     # Create interpolation function
+        #     function_x = interp1d(time_history, eq_x, bounds_error=False, fill_value=0)
+        #     function_y = interp1d(time_history, eq_y, bounds_error=False, fill_value=0)
+        # except:
+        #     # Create time history
+        #     time_history = np.arange(self.dt_gm, self.tmax - 10, self.dt_gm)
+        #     # Create interpolation function
+        #     function_x = interp1d(time_history, eq_x, bounds_error=False, fill_value=0)
+        #     function_y = interp1d(time_history, eq_y, bounds_error=False, fill_value=0)
+
+        return function_x, function_y
 
     def _set_analysis(self):
         """
@@ -58,6 +103,23 @@ class SolutionAlgorithm:
         op.integrator('Newmark', 0.5, 0.25)
         op.analysis('Transient')
 
+    def _calculate_ground_acceleration(self):
+        """
+        Calculates ground acceleration
+        :return:
+        """
+        if not self.dt_gm:
+            # Outputting relative accelerations
+            return 0, 0
+
+        # Otherwise calculate ground acceleration to add to relative acceleration amounting to absolute acceleration
+        current_time = op.getTime()
+
+        ground_acceleration_x = self.int_x(current_time)
+        ground_acceleration_y = self.int_y(current_time)
+
+        return ground_acceleration_x, ground_acceleration_y
+
     def _call_algorithms(self, ok, control_time):
         """
         Calls algorithms
@@ -65,6 +127,7 @@ class SolutionAlgorithm:
         :param control_time: float
         :return: None
         """
+        dtt = self.dt
         if ok != 0:
             if self.pflag:
                 print(f"[FAILURE] Failed at {control_time} of {self.tmax} seconds")
@@ -82,19 +145,22 @@ class SolutionAlgorithm:
             if self.pflag:
                 print(f"[FAILURE] Failed at {control_time} - Trying Broyden...")
             op.algorithm('Broyden', 8)
-            ok = op.analyze(1, self.dt)
+            dtt = self.dt
+            ok = op.analyze(1, dtt)
             op.algorithm(self.ALGORITHM_TYPE)
         if ok != 0:
             if self.pflag:
                 print(f"[FAILURE] Failed at {control_time} - Trying Newton with initial tangent...")
             op.algorithm('Newton', '-initial')
-            ok = op.analyze(1, self.dt)
+            dtt = self.dt
+            ok = op.analyze(1, dtt)
             op.algorithm(self.ALGORITHM_TYPE)
         if ok != 0:
             if self.pflag:
                 print(f"[FAILURE] Failed at {control_time} - Trying NewtonWithLineSearch...")
             op.algorithm('NewtonLineSearch', 0.8)
-            ok = op.analyze(1, self.dt)
+            dtt = self.dt
+            ok = op.analyze(1, dtt)
             op.algorithm(self.ALGORITHM_TYPE)
         if ok != 0:
             if self.pflag:
@@ -102,7 +168,8 @@ class SolutionAlgorithm:
                       f"convergence...")
             op.test('NormDispIncr', self.TOL * 0.1, self.ITER * 50)
             op.algorithm('Newton', '-initial')
-            ok = op.analyze(1, self.dt)
+            dtt = self.dt
+            ok = op.analyze(1, dtt)
             op.test(self.TEST_TYPE, self.TOL, self.ITER)
             op.algorithm(self.ALGORITHM_TYPE)
         if ok != 0:
@@ -110,7 +177,8 @@ class SolutionAlgorithm:
                 print(f"[FAILURE] Failed at {control_time} - Trying NewtonWithLineSearch & relaxed convergence...")
             op.test('NormDispIncr', self.TOL * 0.1, self.ITER * 50)
             op.algorithm('NewtonLineSearch', 0.8)
-            ok = op.analyze(1, self.dt)
+            dtt = self.dt
+            ok = op.analyze(1, dtt)
             op.test(self.TEST_TYPE, self.TOL, self.ITER)
             op.algorithm(self.ALGORITHM_TYPE)
         # Next, halve the timestep with both algorithm and tolerance reduction
@@ -120,7 +188,8 @@ class SolutionAlgorithm:
                       f" relaxed convergence...")
             op.test('NormDispIncr', self.TOL * 0.1, self.ITER * 50)
             op.algorithm('Newton', '-initial')
-            ok = op.analyze(1, 0.5 * self.dt)
+            dtt = 0.5 * self.dt
+            ok = op.analyze(1, dtt)
             op.test(self.TEST_TYPE, self.TOL, self.ITER)
             op.algorithm(self.ALGORITHM_TYPE)
         if ok != 0:
@@ -129,13 +198,17 @@ class SolutionAlgorithm:
                       f" relaxed convergence...")
             op.test('NormDispIncr', self.TOL * 0.1, self.ITER * 50)
             op.algorithm('NewtonLineSearch', 0.8)
-            ok = op.analyze(1, 0.5 * self.dt)
+            dtt = 0.5 * self.dt
+            ok = op.analyze(1, dtt)
             op.test(self.TEST_TYPE, self.TOL, self.ITER)
             op.algorithm(self.ALGORITHM_TYPE)
+
         if ok != 0:
             if self.pflag:
                 print(f"[FAILURE] Failed at {control_time} - exit analysis...")
             self.c_index = -1
+
+        self.dt_analysis = dtt
 
     def _seek_solution(self):
         """
@@ -184,7 +257,6 @@ class SolutionAlgorithm:
             # Start analysis
             ok = op.analyze(1, self.dt)
             control_time = op.getTime()
-
             # If the analysis fails, try the following changes to achieve convergence
             # Analysis will be slower in here though...
             self._call_algorithms(ok, control_time)
@@ -202,13 +274,19 @@ class SolutionAlgorithm:
                     if i == nst:
                         # Index 0 indicates along X direction, and 1 indicates along Y direction
                         # Nodal accelerations in g
-                        tempAccel[j, i, 0] = op.nodeAccel(int(self.tnode[0, i - 1]), j + 1) / 9.81
+                        tempAccel[j, i, 0] = op.nodeAccel(int(self.tnode[0, i - 1]), j + 1) / 9.81 - \
+                                             self._calculate_ground_acceleration()[j] / 9.81
                         # Nodal displacements in m
                         tempDisp[j, i, 0] = op.nodeDisp(int(self.tnode[0, i - 1]), j + 1)
+                        # tempDisp[j, i, 0] = op.nodeResponse(int(self.tnode[0, i - 1]), j + 1, 1)
+
                     else:
                         # Get the PGA values (nodeAccel returns relative, not absolute values, so it will be 0)
-                        tempAccel[j, i, 0] = op.nodeAccel(int(self.bnode[0, i]), j + 1) / 9.81
+                        tempAccel[j, i, 0] = op.nodeAccel(int(self.bnode[0, i]), j + 1) / 9.81 - \
+                                             self._calculate_ground_acceleration()[j] / 9.81
                         tempDisp[j, i, 0] = op.nodeDisp(int(self.bnode[0, i]), j + 1)
+                        # tempDisp[j, i, 0] = op.nodeResponse(int(self.bnode[0, i]), j + 1, 1)
+
                     if i > 0:
                         # Storey height
                         cht = h[i - 1]

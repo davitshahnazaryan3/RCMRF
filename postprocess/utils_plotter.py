@@ -31,7 +31,7 @@ def export_figure(figure, **kwargs):
         target_filepath = os.path.join(path, filename + f'.{filetype}')
         figure.savefig(svg_filepath, bbox_inches='tight', format='svg')
         subprocess.call([inkscape_path, svg_filepath, f'--export-{filetype}', target_filepath])
-        os.remove(svg_filepath)
+        # os.remove(svg_filepath)
 
 
 def create_folder(directory):

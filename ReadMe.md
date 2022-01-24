@@ -176,6 +176,7 @@ Example 7: 2D model with Haselton springs - exampleHaselton2D.py
 * [ ] Haselton hinge models, example
 * [ ] 2D application examples
 * [ ] Elastic models
+* [ ] Different damping models
 * [x] 3D application examples
 
 
