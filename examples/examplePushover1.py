@@ -16,13 +16,13 @@ start_time = get_start_time()
 
 # Directories
 main_dir = Path.cwd()
-input_dir = main_dir / "Inputs"
+input_dir = main_dir / "RCMRF"
 materials_file = input_dir / "materials.csv"
-outputsDir = main_dir / "outputs/pushover"
-loads_file = input_dir / "action.csv"
-modal_analysis_path = main_dir / "outputs/modal/MA.json"
+outputsDir = main_dir / "outputs/RCMRF_temp"
+loads_file = input_dir / "action_ancona.csv"
+modal_analysis_path = main_dir / "outputs/RCMRF_temp/MA.json"
 
-section_file = input_dir / "hinge_models.pickle"
+section_file = input_dir / "hinge_models_Ancona.pickle"
 with open(section_file, "rb") as f:
     section_file = pickle.load(f)
 

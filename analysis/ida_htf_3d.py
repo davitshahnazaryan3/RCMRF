@@ -196,8 +196,8 @@ class IDA_HTF_3D:
         eqnms_list_x = list(pd.read_csv(self.nmsfile_x, header=None)[0])
         eqnms_list_y = list(pd.read_csv(self.nmsfile_y, header=None)[0])
         dts_list = read_text_file(self.dts_file)
-        if not isinstance(dts_list, list):
-            dts_list = [float(dts_list)]
+        if not isinstance(dts_list, np.ndarray):
+            dts_list = np.array([float(dts_list)])
 
         return eqnms_list_x, eqnms_list_y, dts_list
 
@@ -335,7 +335,8 @@ class IDA_HTF_3D:
                         print(f"[IDA] Record: {rec + 1}; Run: {j}; IM: {IM[j - 1]}")
 
                     # Commence analysis
-                    th = SolutionAlgorithm(self.dt, dur, self.dcap, m.g.tnode, m.g.bnode, self.pflag, self.flag3d)
+                    th = SolutionAlgorithm(self.dt, dur, self.dcap, m.g.tnode, m.g.bnode,
+                                           pflag=self.pflag, flag3d=self.flag3d)
                     self.outputs[rec][j] = th.ntha_results
 
                     # Export results at each run
@@ -404,7 +405,8 @@ class IDA_HTF_3D:
                     if self.pflag:
                         print(f"[IDA] Record: {rec + 1}; Run: {j}; IM: {IMtr}")
 
-                    th = SolutionAlgorithm(self.dt, dur, self.dcap, m.g.tnode, m.g.bnode, self.pflag, self.flag3d)
+                    th = SolutionAlgorithm(self.dt, dur, self.dcap, m.g.tnode, m.g.bnode,
+                                           pflag=self.pflag, flag3d=self.flag3d)
                     self.outputs[rec][j] = th.ntha_results
 
                     # Export results at each run
@@ -465,7 +467,8 @@ class IDA_HTF_3D:
                     if self.pflag:
                         print(f"[IDA] Record: {rec + 1}; Run: {j}; IM: {IMfil}")
 
-                    th = SolutionAlgorithm(self.dt, dur, self.dcap, m.g.tnode, m.g.bnode, self.pflag, self.flag3d)
+                    th = SolutionAlgorithm(self.dt, dur, self.dcap, m.g.tnode, m.g.bnode,
+                                           pflag=self.pflag, flag3d=self.flag3d)
                     self.outputs[rec][j] = th.ntha_results
 
                     # Export results at each run

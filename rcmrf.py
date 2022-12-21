@@ -201,6 +201,7 @@ class rcmrf:
                 # Normalize, helps to avoid convergence issues
                 mode_shape = mode_shape / max(mode_shape)
                 mode_shape = np.round(mode_shape, 2)
+
                 # Call and run the OpenSees model
                 m = self.call_model()
                 m.perform_analysis(spo_pattern=2, mode_shape=mode_shape)

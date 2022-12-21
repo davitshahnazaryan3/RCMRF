@@ -1,6 +1,7 @@
 import multiprocessing as mp
 import openseespy.opensees as op
 import pandas as pd
+import numpy as np
 import os
 
 from analysis.solutionAlgorithm import SolutionAlgorithm
@@ -13,8 +14,11 @@ def get_ground_motion(path, gmfileNames):
     names_x = list(pd.read_csv(path / gmfileNames[0], header=None)[0])
     names_y = list(pd.read_csv(path / gmfileNames[1], header=None)[0])
     dts_list = read_text_file(path / gmfileNames[2])
-    if not isinstance(dts_list, list):
+
+    try:
         dts_list = [float(dts_list)]
+    except:
+        dts_list = list(dts_list)
 
     return names_x, names_y, dts_list
 
@@ -50,7 +54,7 @@ def get_records(gm_dir, output_dir, gmfileNames):
 class MultiStripeAnalysis:
     def __init__(self, sections_file, loads_file, materials, gm_dir, damping, omegas, output_path,
                  analysis_time_step=0.01, drift_capacity=10., system="space", hingeModel="hysteretic", flag3d=False,
-                 export_at_each_step=True, pflag=True):
+                 export_at_each_step=True, pflag=True, gm_scaling_factor=1.):
         """
         Initialize
         :param sections_file: Path or dict
@@ -67,6 +71,7 @@ class MultiStripeAnalysis:
         :param flag3d: bool
         :param export_at_each_step: bool
         :param pflag: bool
+        :param gm_scaling_factor: float
         """
         self.sections_file = sections_file
         self.loads_file = loads_file
@@ -82,6 +87,7 @@ class MultiStripeAnalysis:
         self.flag3d = flag3d
         self.export_at_each_step = export_at_each_step
         self.pflag = pflag
+        self.gm_scaling_factor = gm_scaling_factor
 
         # Constants
         self.g = 9.81
@@ -101,7 +107,7 @@ class MultiStripeAnalysis:
         :param generate_model: bool                         Generate model or not
         :return: class                                      Object Model
         """
-        m = Model("MSA", self.sections_file, self.loads_file, self.materials, None, self.system,
+        m = Model("MSA", self.sections_file, self.loads_file, self.materials, self.output_path, self.system,
                   self.hingeModel, flag3d=self.flag3d)
         if generate_model:
             # Create the nonlinear model
@@ -113,6 +119,25 @@ class MultiStripeAnalysis:
             s.static_analysis(None, self.flag3d)
         return m
 
+    @staticmethod
+    def _append_record(x, y):
+        """
+        Record selection issue related to the database of records
+        Whereby the two pairs of the records have different sizes
+        To remedy the issue, the smallest of the records is appended with zeros
+        :param x: list
+        :param y: list
+        :return: list, list
+        """
+        nx = len(x)
+        ny = len(y)
+
+        if nx < ny:
+            x = np.append(x, np.zeros(ny - nx))
+        if ny < nx:
+            y = np.append(y, np.zeros(nx - ny))
+        return x, y
+
     def _time_series(self, dt, pathx, pathy, fx, fy):
         """
         Defines time series
@@ -123,10 +148,11 @@ class MultiStripeAnalysis:
         :param fy: float                            Scaling factor in y direction
         :return: None
         """
-        # # Eigen value analysis
-        # eigen_values = np.asarray(op.eigen(max(self.damping)))
-        # omega = eigen_values ** 0.5
-        # periods = 2 * np.pi / omega
+        # Eigen value analysis
+        eigen_values = np.asarray(op.eigen(max(self.damping)))
+        omega = eigen_values ** 0.5
+        periods = 2 * np.pi / omega
+        self.omegas = omega
 
         # Delete the old analysis and all it's component objects
         op.wipeAnalysis()
@@ -165,7 +191,7 @@ class MultiStripeAnalysis:
         if workers > 0:
             workers = workers + 1
 
-        with mp.Pool(workers - 1) as pool:
+        with mp.Pool(workers - 1, maxtasksperchild=1) as pool:
             outputs = pool.imap(self.run_msa, list(records.items()))
 
             for _ in outputs:
@@ -195,19 +221,27 @@ class MultiStripeAnalysis:
 
             # duration
             accg_x = read_text_file(eq_name_x)
-            dur = self.EXTRA_DUR + dt * len(accg_x)
+            accg_y = read_text_file(eq_name_y)
+            accg_x, accg_y = self._append_record(accg_x, accg_y)
+
+            dur = round(self.EXTRA_DUR + dt * len(accg_x), 5)
 
             # Create the model
             m = self._call_model()
 
             # Create the time series
-            self._time_series(dt, eq_name_x, eq_name_y, 1, 1)
+            self._time_series(dt, eq_name_x, eq_name_y, self.gm_scaling_factor, self.gm_scaling_factor)
 
             if self.pflag:
                 print(f"[MSA] Record: {rec} - {name}: {names_x[rec]} and {names_y[rec]} pair;")
 
-            th = SolutionAlgorithm(self.analysis_time_step, dur, self.drift_capacity, m.g.tnode, m.g.bnode, self.pflag,
-                                   self.flag3d)
+            self.analysis_time_step = min(self.analysis_time_step, dt)
+            if dt % self.analysis_time_step != 0:
+                self.analysis_time_step = dt / (int(dt / self.analysis_time_step))
+
+            th = SolutionAlgorithm(self.analysis_time_step, dur, self.drift_capacity, m.g.tnode, m.g.bnode,
+                                   dt, accg_x, accg_y, self.gm_scaling_factor, self.gm_scaling_factor,
+                                   pflag=self.pflag, flag3d=self.flag3d)
             self.outputs[name][rec] = th.ntha_results
 
             if self.export_at_each_step:

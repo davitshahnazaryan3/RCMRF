@@ -3,7 +3,7 @@ Example file to run static analysis on a 3D building model
 """
 
 from pathlib import Path
-from rcmrf import rcmrf
+from rcmrf import RCMRF
 import pickle
 
 from utils.utils import get_time, get_start_time
@@ -27,7 +27,7 @@ with open(section_file, "rb") as f:
 analysis_type = ["MA"]
 flag3d = True
 
-m = rcmrf(section_file, loads_file, materials_file, outputsDir, analysis_type=analysis_type, flag3d=flag3d)
+m = RCMRF(section_file, loads_file, materials_file, outputsDir, analysis_type=analysis_type, flag3d=flag3d)
 
 m.wipe()
 m.run_model()
