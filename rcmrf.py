@@ -29,7 +29,7 @@ from client.modelToTCL import ModelToTCL
 from utils.utils import createFolder, get_time, get_start_time
 
 
-class rcmrf:
+class RCMRF:
     def __init__(self, sections_file, loads_file, materials_file, outputsDir, gmdir=None, gmfileNames=None, IM_type=2,
                  max_runs=15, analysis_time_step=.01, drift_capacity=10., analysis_type=None, system="Space",
                  hinge_model="Hysteretic", flag3d=False, direction=0, export_at_each_step=True,
@@ -311,7 +311,7 @@ if __name__ == "__main__":
     period_assignment = {"x": 0, "y": 1}
     periods = [0.72, 0.62]
     # Let's go...
-    m = rcmrf(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
+    m = RCMRF(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
               analysis_type=analysis_type, system="Perimeter", hinge_model=hingeModel, flag3d=flag3d,
               direction=direction, export_at_each_step=export_at_each_step, period_assignment=period_assignment,
               periods_ida=periods, max_runs=15, tcl_filename="low")

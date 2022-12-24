@@ -29,12 +29,12 @@ if __name__ == "__main__":
     gmfileNames = ["GMR_names1.txt", "GMR_names2.txt", "GMR_dts.txt"]
 
     hingeModel = "Hysteretic"
-    analysis_type = ["TH"]
+    analysis_type = ["MA"]
     flag3d = False
     analysis_time_step = 0.01
-    system = "space"
-    max_runs = 10
-    export_at_each_step = False
+    system = "perimeter"
+    max_runs = 15
+    export_at_each_step = True
     modal_analysis_path = main_dir / "outputs/hysteretic2d/MA.json"
 
     m = RCMRF(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,

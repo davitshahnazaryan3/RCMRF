@@ -224,8 +224,8 @@ class Model:
                               "-jntOffset", 0.0, 0.2, 0.0, 0.0, -0.2, 0.0)
 
             else:
-                op.geomTransf(col_transf_type, self.COL_TRANSF_TAG)
-                op.geomTransf(beam_transf_tag, self.BEAM_X_TRANSF_TAG)
+                op.geomTransf(col_transf_type, self.COL_TRANSF_TAG, "-jntOffset", 0.0, 0.3, 0.0, -0.3)
+                op.geomTransf(beam_transf_tag, self.BEAM_X_TRANSF_TAG, "-jntOffset", 0.2, 0.0, -0.2, 0.0)
 
         print('[SUCCESS] Material Properties have been defined')
 

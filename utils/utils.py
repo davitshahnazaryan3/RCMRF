@@ -2,6 +2,7 @@ import os
 import timeit
 import json
 import pickle
+import pandas as pd
 import numpy as np
 
 
@@ -77,3 +78,84 @@ def export_to(filepath, data, filetype):
 def tuple_to_dict(data):
     out = dict((i, d) for i, d in enumerate(data))
     return out
+
+
+def export(data, fstiff, path, site):
+    """
+    export cache to path
+    :param data: dict                               IPBSD AnconaSaAvg
+    :param fstiff: float                            Stiffness reduction factor
+    :param path: str                                Path to directory to export the files
+    :param site: str
+    :return: None
+    """
+    # Number of storeys
+    nst = data.nst
+
+    # Masses (actual frame mass is exported) (for 2D only)
+    masses = np.array(data.masses)
+
+    # Creating a DataFrame for loads
+    loads = pd.DataFrame(columns=["Storey", "Pattern", "Load"])
+
+    for st in range(1, nst + 1):
+        # Masses (for 2D only)
+        loads = loads.append({"Storey": st,
+                              "Pattern": "mass",
+                              "Load": masses[st - 1] / data.n_seismic}, ignore_index=True)
+
+        # Area loads (for both 2D and 3D)
+        q = data.inputs["loads"][st - 1]
+        loads = loads.append({"Storey": st,
+                              "Pattern": "q",
+                              "Load": q}, ignore_index=True)
+
+        q = data.inputs["seismic"][st - 1]
+        loads = loads.append({"Storey": st,
+                              "Pattern": "seismic",
+                              "Load": q}, ignore_index=True)
+
+    # Exporting action for use by a Modeler module
+    """
+    For a two-way slab assumption, load distribution will not be uniform.
+    For now and for simplicity, total load over each directions is computed and then divided by global length to 
+    assume a uniform distribution. 
+    """
+    export_to(path / f"action_{site}", loads, "csv")
+
+    # Materials
+    fc = data.fc
+    fy = data.fy
+    Es = data.elastic_modulus_steel
+
+    # Elastic modulus of uncracked concrete
+    Ec = (3320 * np.sqrt(fc) + 6900) * fstiff
+
+    materials = pd.DataFrame({"fc": fc,
+                              "fy": fy,
+                              "Es": Es,
+                              "Ec": Ec}, index=[0])
+
+    # Exporting the materials file for use by a Modeler module
+    export_to(path / f"materials_{site}", materials, "csv")
+
+
+def getIndex(target, data, tol=0.):
+    if np.where(data >= target)[0].size == 0:
+        return np.nan
+    else:
+        return np.where(data >= target - tol)[0][0]
+
+
+def create_folder(directory):
+    """
+    creates directory
+    :param directory: str                   Directory to be created
+    :return: None
+    """
+    try:
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+    except OSError:
+        print("Error: Creating directory. " + directory)
+
