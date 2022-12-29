@@ -31,7 +31,7 @@ from utils.utils import createFolder, get_time, get_start_time
 
 class RCMRF:
     def __init__(self, sections_file, loads_file, materials_file, outputsDir, gmdir=None, gmfileNames=None, IM_type=2,
-                 max_runs=15, analysis_time_step=.01, drift_capacity=10., analysis_type=None, system="Space",
+                 max_runs=15, analysis_time_step=None, drift_capacity=10., analysis_type=None, system="Space",
                  hinge_model="Hysteretic", flag3d=False, direction=0, export_at_each_step=True,
                  period_assignment=None, periods_ida=None, tcl_filename=None, modal_analysis_path=None):
         """
@@ -131,9 +131,9 @@ class RCMRF:
         # Generate the model if specified
         if generate_model:
             m.model()
-
             if "PO" in self.analysis_type:
                 m.define_loads(m.elements, apply_point=False)
+
                 s = Static()
                 if self.tcl_filename:
                     s.static_analysis(self.outputsDir, self.flag3d)
@@ -189,6 +189,10 @@ class RCMRF:
                 # Static pushover analysis needs to be run after modal analysis
                 with open(self.modal_analysis_path) as f:
                     modal_analysis_outputs = json.load(f)
+
+                if not self.flag3d:
+                    # in case of 2D modelling, use x direction only
+                    self.period_assignment = {"x": 0}
 
                 # Modal shape as the SPO lateral load pattern shape
                 if self.direction == 0:

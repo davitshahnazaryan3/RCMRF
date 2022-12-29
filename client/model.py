@@ -532,6 +532,7 @@ class Model:
                         op.mass(int(f"{st + 2}{bay + 1}10"), m, self.NEGLIGIBLE, self.NEGLIGIBLE)
                     else:
                         op.mass(int(f"{bay + 1}{st + 1}"), m, self.NEGLIGIBLE, self.NEGLIGIBLE)
+
             else:
                 print('[SUCCESS] Seismic masses have been defined')
 
@@ -721,7 +722,7 @@ class Model:
             if apply_point:
                 print('[SUCCESS] Gravity loads as point loads have been defined')
             else:
-                print('[SUCCESS] Gravity loads aas distributed loads have been defined')
+                print('[SUCCESS] Gravity loads as distributed loads have been defined')
 
     def perform_analysis(self, elfm_filename=None, **kwargs):
         """
@@ -978,6 +979,8 @@ class Model:
                         base_cols.append(et)
 
                 s.hysteretic_hinges(et, None, None, ele, transfTag, self.flag3d, None)
+
+        print('[SUCCESS] Lumped hinge models have been defined')
 
         return elements, base_cols
 

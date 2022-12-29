@@ -49,7 +49,7 @@ if __name__ == "__main__":
 
     site = "Ancona"
     hazard_path = Path.cwd().parents[0] / "examples/inputs/hazard_ancona.pickle"
-    prel_solution_path = Path.cwd().parents[0] / "examples/PBEE/inputs/model2CS"
+    prel_solution_path = Path.cwd().parents[0] / "examples/PBEE/inputs/model2"
 
     ec = EurocodeDesign("Model2", site, flag3d=False)
     ec.data = Input(flag3d=False)

@@ -5,10 +5,10 @@ __pycache__/*
 analysis/__pycache__/'
 client/__pycache__/'
 /venv/
-/sample/RCMRF/
+/examples/PBEE/inputs/sample/RCMRF/
 /temp.py
-/sample/groundMotionMSA/
-/sample/RCMRF/Medium/
-/sample/
+/examples/PBEE/inputs/sample/groundMotionMSA/
+/examples/PBEE/inputs/sample/RCMRF/Medium/
+/examples/PBEE/inputs/sample/
 /examples/PBEE/
 todo.txt

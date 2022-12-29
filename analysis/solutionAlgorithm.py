@@ -132,16 +132,16 @@ class SolutionAlgorithm:
         if ok != 0:
             if self.pflag:
                 print(f"[FAILURE] Failed at {control_time} of {self.tmax} seconds")
-        if ok != 0:
-            if self.pflag:
-                print(f"[FAILURE] Failed at {control_time} - Reduced timestep by half...")
-            dtt = 0.5 * self.dt
-            ok = op.analyze(1, dtt)
-        if ok != 0:
-            if self.pflag:
-                print(f"[FAILURE] Failed at {control_time} - Reduced timestep by quarter...")
-            dtt = 0.25 * self.dt
-            ok = op.analyze(1, dtt)
+        # if ok != 0:
+        #     if self.pflag:
+        #         print(f"[FAILURE] Failed at {control_time} - Reduced timestep by half...")
+        #     dtt = 0.5 * self.dt
+        #     ok = op.analyze(1, dtt)
+        # if ok != 0:
+        #     if self.pflag:
+        #         print(f"[FAILURE] Failed at {control_time} - Reduced timestep by quarter...")
+        #     dtt = 0.25 * self.dt
+        #     ok = op.analyze(1, dtt)
         if ok != 0:
             if self.pflag:
                 print(f"[FAILURE] Failed at {control_time} - Trying Broyden...")
@@ -183,26 +183,26 @@ class SolutionAlgorithm:
             op.test(self.TEST_TYPE, self.TOL, self.ITER)
             op.algorithm(self.ALGORITHM_TYPE)
         # Next, halve the timestep with both algorithm and tolerance reduction
-        if ok != 0:
-            if self.pflag:
-                print(f"[FAILURE] Failed at {control_time} - Trying Newton with initial tangent, reduced timestep &"
-                      f" relaxed convergence...")
-            op.test('NormDispIncr', self.TOL * 0.1, self.ITER * 50)
-            op.algorithm('Newton', '-initial')
-            dtt = 0.5 * self.dt
-            ok = op.analyze(1, dtt)
-            op.test(self.TEST_TYPE, self.TOL, self.ITER)
-            op.algorithm(self.ALGORITHM_TYPE)
-        if ok != 0:
-            if self.pflag:
-                print(f"[FAILURE] Failed at {control_time} - Trying NewtonWithLineSearch, reduced timestep &"
-                      f" relaxed convergence...")
-            op.test('NormDispIncr', self.TOL * 0.1, self.ITER * 50)
-            op.algorithm('NewtonLineSearch', 0.8)
-            dtt = 0.5 * self.dt
-            ok = op.analyze(1, dtt)
-            op.test(self.TEST_TYPE, self.TOL, self.ITER)
-            op.algorithm(self.ALGORITHM_TYPE)
+        # if ok != 0:
+        #     if self.pflag:
+        #         print(f"[FAILURE] Failed at {control_time} - Trying Newton with initial tangent, reduced timestep &"
+        #               f" relaxed convergence...")
+        #     op.test('NormDispIncr', self.TOL * 0.1, self.ITER * 50)
+        #     op.algorithm('Newton', '-initial')
+        #     dtt = 0.5 * self.dt
+        #     ok = op.analyze(1, dtt)
+        #     op.test(self.TEST_TYPE, self.TOL, self.ITER)
+        #     op.algorithm(self.ALGORITHM_TYPE)
+        # if ok != 0:
+        #     if self.pflag:
+        #         print(f"[FAILURE] Failed at {control_time} - Trying NewtonWithLineSearch, reduced timestep &"
+        #               f" relaxed convergence...")
+        #     op.test('NormDispIncr', self.TOL * 0.1, self.ITER * 50)
+        #     op.algorithm('NewtonLineSearch', 0.8)
+        #     dtt = 0.5 * self.dt
+        #     ok = op.analyze(1, dtt)
+        #     op.test(self.TEST_TYPE, self.TOL, self.ITER)
+        #     op.algorithm(self.ALGORITHM_TYPE)
 
         if ok != 0:
             if self.pflag:

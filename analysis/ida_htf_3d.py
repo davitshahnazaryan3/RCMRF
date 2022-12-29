@@ -196,9 +196,6 @@ class IDA_HTF_3D:
         eqnms_list_x = list(pd.read_csv(self.nmsfile_x, header=None)[0])
         eqnms_list_y = list(pd.read_csv(self.nmsfile_y, header=None)[0])
         dts_list = read_text_file(self.dts_file)
-        if not isinstance(dts_list, np.ndarray):
-            dts_list = np.array([float(dts_list)])
-
         return eqnms_list_x, eqnms_list_y, dts_list
 
     def _time_series(self, dt, pathx, pathy, fx, fy):
@@ -248,7 +245,11 @@ class IDA_HTF_3D:
 
         # Get the ground motion set information
         eqnms_list_x, eqnms_list_y, dts_list = self._get_gm()
-        nrecs = len(dts_list)
+        try:
+            nrecs = len(dts_list)
+        except:
+            dts_list = np.array([dts_list])
+            nrecs = len(dts_list)
 
         # Initialize intensity measures (shape)
         self.IM_output = np.zeros((nrecs, self.max_runs))
@@ -295,6 +296,32 @@ class IDA_HTF_3D:
                 # Get the geometric mean
                 IM_geomean = np.power(IMx * IMy, 0.5)
 
+            elif self.IM_type == 3:
+                print("[IDA] IM is Sa_avg")
+                if self.flag3d:
+                    Tcond_x = self.T_info[0]
+                    Tcond_y = self.T_info[1]
+                else:
+                    if isinstance(self.T_info, float):
+                        Tcond_x = Tcond_y = self.T_info
+                    else:
+                        Tcond_x = Tcond_y = self.T_info[0]
+
+                periods_x = []
+                periods_y = []
+                for factor in np.linspace(0.2, 1.5, 10):
+                    factor = round(factor, 2)
+                    periods_x.append(factor * Tcond_x)
+                    periods_y.append(factor * Tcond_y)
+
+                IMx = np.array([self._get_IM(accg_x, dts_list[rec], tx, self.xi)[-1] for tx in periods_x])
+                IMy = np.array([self._get_IM(accg_y, dts_list[rec], ty, self.xi)[-1] for ty in periods_y])
+
+                imx_geo = IMx.prod() ** (1 / len(IMx))
+                imy_geo = IMy.prod() ** (1 / len(IMy))
+
+                IM_geomean = np.power(imx_geo * imy_geo, 0.5)
+
             else:
                 raise ValueError('[EXCEPTION] IM type provided incorrectly (must be 1 or 2)')
 
@@ -331,11 +358,16 @@ class IDA_HTF_3D:
                     # The hunting intensity has been determined, now analysis commences
                     m = self._call_model()
                     self._time_series(dt, eq_name_x, eq_name_y, sf_x, sf_y)
+                    if self.dt is None:
+                        analysis_time_step = dt
+                    else:
+                        analysis_time_step = self.dt
+
                     if self.pflag:
                         print(f"[IDA] Record: {rec + 1}; Run: {j}; IM: {IM[j - 1]}")
 
                     # Commence analysis
-                    th = SolutionAlgorithm(self.dt, dur, self.dcap, m.g.tnode, m.g.bnode,
+                    th = SolutionAlgorithm(analysis_time_step, dur, self.dcap, m.g.tnode, m.g.bnode,
                                            pflag=self.pflag, flag3d=self.flag3d)
                     self.outputs[rec][j] = th.ntha_results
 
@@ -405,7 +437,7 @@ class IDA_HTF_3D:
                     if self.pflag:
                         print(f"[IDA] Record: {rec + 1}; Run: {j}; IM: {IMtr}")
 
-                    th = SolutionAlgorithm(self.dt, dur, self.dcap, m.g.tnode, m.g.bnode,
+                    th = SolutionAlgorithm(analysis_time_step, dur, self.dcap, m.g.tnode, m.g.bnode,
                                            pflag=self.pflag, flag3d=self.flag3d)
                     self.outputs[rec][j] = th.ntha_results
 
@@ -467,7 +499,7 @@ class IDA_HTF_3D:
                     if self.pflag:
                         print(f"[IDA] Record: {rec + 1}; Run: {j}; IM: {IMfil}")
 
-                    th = SolutionAlgorithm(self.dt, dur, self.dcap, m.g.tnode, m.g.bnode,
+                    th = SolutionAlgorithm(analysis_time_step, dur, self.dcap, m.g.tnode, m.g.bnode,
                                            pflag=self.pflag, flag3d=self.flag3d)
                     self.outputs[rec][j] = th.ntha_results
 

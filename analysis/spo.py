@@ -242,19 +242,28 @@ class SPO:
             baseShear = np.append(baseShear, eleForceTemp)
 
             eleList = op.getEleTags()
+
             for ele in eleList:
                 if ele not in self.sectionForces:
-                    if self.direction == 0:
-                        self.sectionForces[ele] = [max(abs(op.eleForce(ele, 5)), abs(op.eleForce(ele, 11)))]
+                    if self.flag3d:
+                        if self.direction == 0:
+                            self.sectionForces[ele] = [max(abs(op.eleForce(ele, 5)), abs(op.eleForce(ele, 11)))]
+                        else:
+                            self.sectionForces[ele] = [max(abs(op.eleForce(ele, 4)), abs(op.eleForce(ele, 10)))]
                     else:
-                        self.sectionForces[ele] = [max(abs(op.eleForce(ele, 4)), abs(op.eleForce(ele, 10)))]
+                        self.sectionForces[ele] = [max(abs(op.eleForce(ele, 3)), abs(op.eleForce(ele, 6)))]
+
                 else:
-                    if self.direction == 0:
-                        self.sectionForces[ele].append(max(abs(op.eleForce(ele, 5)), abs(op.eleForce(ele, 11))))
+                    if self.flag3d:
+                        if self.direction == 0:
+                            self.sectionForces[ele].append(max(abs(op.eleForce(ele, 5)), abs(op.eleForce(ele, 11))))
+                        else:
+                            self.sectionForces[ele].append(max(abs(op.eleForce(ele, 4)), abs(op.eleForce(ele, 10))))
                     else:
-                        self.sectionForces[ele].append(max(abs(op.eleForce(ele, 4)), abs(op.eleForce(ele, 10))))
+                        self.sectionForces[ele].append(max(abs(op.eleForce(ele, 3)), abs(op.eleForce(ele, 6))))
 
             loadf = op.getTime()
+
             step += 1
 
         # Reverse sign of base_shear
