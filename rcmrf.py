@@ -19,21 +19,21 @@ import openseespy.opensees as op
 from analysis.multiStripeAnalysis import get_records
 from client.model import Model
 from analysis.static import Static
-from pathlib import Path
 import numpy as np
 import os
 import json
 import pickle
 from analysis.ida_htf_3d import IDA_HTF_3D
 from client.modelToTCL import ModelToTCL
-from utils.utils import createFolder, get_time, get_start_time
+from utils.utils import createFolder
 
 
 class RCMRF:
     def __init__(self, sections_file, loads_file, materials_file, outputsDir, gmdir=None, gmfileNames=None, IM_type=2,
                  max_runs=15, analysis_time_step=None, drift_capacity=10., analysis_type=None, system="Space",
                  hinge_model="Hysteretic", flag3d=False, direction=0, export_at_each_step=True,
-                 period_assignment=None, periods_ida=None, tcl_filename=None, modal_analysis_path=None):
+                 period_assignment=None, periods_ida=None, tcl_filename=None, modal_analysis_path=None,
+                 use_recorder=True, recorder_cache=None):
         """
         Initializes master file
         :param sections_file: str                   Name of file containing section data in '*.csv' or '*.pickle' format
@@ -61,6 +61,9 @@ class RCMRF:
         :param periods_ida: list                    Periods to use for IDA, optional, in case MA periods are not needed
         :param tcl_filename: str                    TCL filename to export to
         :param modal_analysis_path: Path            Path to modal_analysis_results.json
+        :param use_recorder: bool                   Uses openseespy recorder to output file instead of node recorders
+        :param recorder_cache: str                  Acceleration cache filename, don't leave empty when running multiple
+                                                    analysis or MSA to avoid file rewrites
         """
         # list of strings for 3D modelling, and string for 2D modelling
         self.sections_file = sections_file
@@ -84,6 +87,8 @@ class RCMRF:
         self.period_assignment = period_assignment
         self.periods_ida = periods_ida
         self.tcl_filename = tcl_filename
+        self.use_recorder = use_recorder
+        self.recorder_cache = recorder_cache
 
         if modal_analysis_path:
             self.modal_analysis_path = modal_analysis_path
@@ -240,7 +245,8 @@ class RCMRF:
                              self.analysis_time_step, self.drift_capacity, self.gmdir, self.gmfileNames,
                              self.analysis_type, self.sections_file, self.loads_file, self.materials_file, self.system,
                              hingeModel=self.hinge_model, pflag=True, flag3d=self.flag3d,
-                             export_at_each_step=self.export_at_each_step)
+                             export_at_each_step=self.export_at_each_step, use_recorder=self.use_recorder,
+                             recorder_cache=self.recorder_cache)
 
             # The Set-up
             ida.establish_im(output_dir=self.outputsDir / "NLTHA")
@@ -259,7 +265,6 @@ class RCMRF:
             print("[SUCCESS] IDA done")
 
         elif "MSA" in self.analysis_type:
-            # TODO, currently supports space and 3D with hysteretic modelling
 
             # Create a folder for NLTHA
             createFolder(self.outputsDir / "MSA")
@@ -276,55 +281,3 @@ class RCMRF:
             m.define_loads(m.elements, apply_point=False)
             m.perform_analysis(damping=self.DAMPING)
 
-
-if __name__ == "__main__":
-
-    start_time = get_start_time()
-
-    # Directories
-    directory_x = Path.cwd().parents[0] / ".applications/LOSS Validation Manuscript/Case21/Cache/framex"
-    materials_file = directory_x.parents[1] / "materials.csv"
-    loads_file = directory_x.parents[1] / "action.csv"
-    outputsDir = directory_x.parents[1] / "RCMRF"
-
-    # X direction
-    section_file_x = directory_x / "hinge_models.csv"
-
-    # Y direction
-    directory_y = Path.cwd().parents[0] / ".applications/LOSS Validation Manuscript/Case21/Cache/framey"
-    section_file_y = directory_y / "hinge_models.csv"
-
-    # Gravity elements
-    directory_gr = Path.cwd().parents[0] / ".applications/LOSS Validation Manuscript/Case21/Cache"
-    section_file_gr = directory_gr / "gravity_hinges.csv"
-
-    # Directories
-    section_file = {"x": section_file_x, "y": section_file_y, "gravity": section_file_gr}
-
-    # GM directory
-    gmdir = Path.cwd() / "sample/groundMotion"
-    gmfileNames = ["GMR_names1.txt", "GMR_names2.txt", "GMR_dts.txt", "GMR_durs.txt"]
-
-    # RCMRF inputs
-    hingeModel = "Hysteretic"
-    analysis_type = ["ST"]
-    # Run MA always with direction = 0
-    direction = 0
-    flag3d = True
-    export_at_each_step = True
-    period_assignment = {"x": 0, "y": 1}
-    periods = [0.72, 0.62]
-    # Let's go...
-    m = RCMRF(section_file, loads_file, materials_file, outputsDir, gmdir=gmdir, gmfileNames=gmfileNames,
-              analysis_type=analysis_type, system="Perimeter", hinge_model=hingeModel, flag3d=flag3d,
-              direction=direction, export_at_each_step=export_at_each_step, period_assignment=period_assignment,
-              periods_ida=periods, max_runs=15, tcl_filename="low")
-
-    m.wipe()
-    m.run_model()
-
-    # Wipe the model
-    m.wipe()
-
-    # Time it
-    get_time(start_time)

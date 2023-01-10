@@ -11,9 +11,16 @@ from utils.utils import read_text_file, createFolder, export_to
 
 
 def get_ground_motion(path, gmfileNames):
-    names_x = list(pd.read_csv(path / gmfileNames[0], header=None)[0])
-    names_y = list(pd.read_csv(path / gmfileNames[1], header=None)[0])
-    dts_list = read_text_file(path / gmfileNames[2])
+    names_y = None
+
+    if len(gmfileNames) == 2:
+        # 2D modelling, a single direction of a ground motion record is provided
+        names_x = list(pd.read_csv(path / gmfileNames[0], header=None)[0])
+        dts_list = read_text_file(path / gmfileNames[1])
+    else:
+        names_x = list(pd.read_csv(path / gmfileNames[0], header=None)[0])
+        names_y = list(pd.read_csv(path / gmfileNames[1], header=None)[0])
+        dts_list = read_text_file(path / gmfileNames[2])
 
     try:
         dts_list = [float(dts_list)]
@@ -52,9 +59,11 @@ def get_records(gm_dir, output_dir, gmfileNames):
 
 
 class MultiStripeAnalysis:
+    use_multiprocess = False
+
     def __init__(self, sections_file, loads_file, materials, gm_dir, damping, omegas, output_path,
-                 analysis_time_step=0.01, drift_capacity=10., system="space", hingeModel="hysteretic", flag3d=False,
-                 export_at_each_step=True, pflag=True, gm_scaling_factor=1.):
+                 analysis_time_step=None, drift_capacity=10., system="space", hingeModel="hysteretic", flag3d=False,
+                 export_at_each_step=True, pflag=True, gm_scaling_factor=1., use_recorder=True, recorder_cache=None):
         """
         Initialize
         :param sections_file: Path or dict
@@ -72,6 +81,8 @@ class MultiStripeAnalysis:
         :param export_at_each_step: bool
         :param pflag: bool
         :param gm_scaling_factor: float
+        :param use_recorder: bool                   Uses openseespy recorder to output file instead of node recorders
+        :param recorder_cache: str
         """
         self.sections_file = sections_file
         self.loads_file = loads_file
@@ -88,6 +99,8 @@ class MultiStripeAnalysis:
         self.export_at_each_step = export_at_each_step
         self.pflag = pflag
         self.gm_scaling_factor = gm_scaling_factor
+        self.use_recorder = use_recorder
+        self.recorder_cache = recorder_cache
 
         # Constants
         self.g = 9.81
@@ -149,10 +162,10 @@ class MultiStripeAnalysis:
         :return: None
         """
         # Eigen value analysis
-        eigen_values = np.asarray(op.eigen(max(self.damping)))
-        omega = eigen_values ** 0.5
-        periods = 2 * np.pi / omega
-        self.omegas = omega
+        # eigen_values = np.asarray(op.eigen(max(self.damping)))
+        # omega = eigen_values ** 0.5
+        # periods = 2 * np.pi / omega
+        # self.omegas = omega
 
         # Delete the old analysis and all it's component objects
         op.wipeAnalysis()
@@ -165,7 +178,9 @@ class MultiStripeAnalysis:
         # Rayleigh damping
         op.rayleigh(a0, 0.0, 0.0, a1)
         op.timeSeries('Path', self.TSTAGX, '-dt', dt, '-filePath', str(pathx), '-factor', fx)
-        op.timeSeries('Path', self.TSTAGY, '-dt', dt, '-filePath', str(pathy), '-factor', fy)
+        if pathy is not None:
+            op.timeSeries('Path', self.TSTAGY, '-dt', dt, '-filePath', str(pathy), '-factor', fy)
+
         op.pattern('UniformExcitation', self.PTAGX, 1, '-accel', self.TSTAGX)
         if self.flag3d:
             op.pattern('UniformExcitation', self.PTAGY, 2, '-accel', self.TSTAGY)
@@ -185,6 +200,8 @@ class MultiStripeAnalysis:
         :param workers: int
         :return: None
         """
+        self.use_multiprocess = True
+
         # Get number of CPUs available
         if workers == 0:
             workers = mp.cpu_count()
@@ -206,25 +223,44 @@ class MultiStripeAnalysis:
         name, data = item
         print(f"[START] Running {name} records...")
 
+        # Get the filenames of record pairs and time steps
         names_x = data["X"]
         names_y = data["Y"]
         dts = data["dt"]
+
+        # initialize for second direction (if 3D modelling is utilized, both directions of record, then the variables
+        # will be updated)
+        accg_y = None
+        eq_name_y = None
 
         # Initialize outputs
         self.outputs[name] = {}
 
         # For each record pair
         for rec in range(len(names_x)):
+            if self.use_multiprocess:
+                self.recorder_cache = f"{name}_{rec}.txt"
+
+            # reading records
             eq_name_x = self.gm_dir / name / names_x[rec]
-            eq_name_y = self.gm_dir / name / names_y[rec]
             dt = dts[rec]
-
-            # duration
             accg_x = read_text_file(eq_name_x)
-            accg_y = read_text_file(eq_name_y)
-            accg_x, accg_y = self._append_record(accg_x, accg_y)
 
+            # Second direction
+            if names_y is not None:
+                eq_name_y = self.gm_dir / name / names_y[rec]
+                accg_y = read_text_file(eq_name_y)
+                # duration, make sure both directions have the same size
+                accg_x, accg_y = self._append_record(accg_x, accg_y)
+
+            # add extra duration of free vibrations to the records
             dur = round(self.EXTRA_DUR + dt * len(accg_x), 5)
+
+            # analysis time step
+            if self.analysis_time_step is None:
+                analysis_time_step = dt
+            else:
+                analysis_time_step = self.analysis_time_step
 
             # Create the model
             m = self._call_model()
@@ -233,15 +269,19 @@ class MultiStripeAnalysis:
             self._time_series(dt, eq_name_x, eq_name_y, self.gm_scaling_factor, self.gm_scaling_factor)
 
             if self.pflag:
-                print(f"[MSA] Record: {rec} - {name}: {names_x[rec]} and {names_y[rec]} pair;")
+                if names_y is None:
+                    print(f"[MSA] Record: {rec} - {name}: {names_x[rec]};")
+                else:
+                    print(f"[MSA] Record: {rec} - {name}: {names_x[rec]} and {names_y[rec]} pair;")
 
-            self.analysis_time_step = min(self.analysis_time_step, dt)
-            if dt % self.analysis_time_step != 0:
-                self.analysis_time_step = dt / (int(dt / self.analysis_time_step))
+            analysis_time_step = min(analysis_time_step, dt)
+            if dt % analysis_time_step != 0:
+                analysis_time_step = dt / (int(dt / analysis_time_step))
 
-            th = SolutionAlgorithm(self.analysis_time_step, dur, self.drift_capacity, m.g.tnode, m.g.bnode,
+            th = SolutionAlgorithm(analysis_time_step, dur, self.drift_capacity, m.g.tnode, m.g.bnode,
                                    dt, accg_x, accg_y, self.gm_scaling_factor, self.gm_scaling_factor,
-                                   pflag=self.pflag, flag3d=self.flag3d)
+                                   pflag=self.pflag, flag3d=self.flag3d, use_recorder=self.use_recorder,
+                                   recorder_cache=self.recorder_cache)
             self.outputs[name][rec] = th.ntha_results
 
             if self.export_at_each_step:

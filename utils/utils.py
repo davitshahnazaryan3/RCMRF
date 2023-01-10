@@ -1,4 +1,5 @@
 import os
+import subprocess
 import timeit
 import json
 import pickle
@@ -38,6 +39,35 @@ def read_text_file(name):
     :return: ndarray                            Read column in np.array format
     """
     return np.loadtxt(name)
+
+
+def export_figure(figure, **kwargs):
+    """
+    Saves figure as .emf
+    :param figure: fig handle
+    :param kwargs: filepath: str                File name, e.g. '*\filename'
+    :return: None
+    """
+    inkscape_path = kwargs.get('inkscape', "C://Program Files//Inkscape//bin//inkscape.exe")
+    filepath = kwargs.get('filename', None)
+    filetype = kwargs.get('filetype', None)
+    if filepath is not None:
+        path, filename = os.path.split(filepath)
+        filename, extension = os.path.splitext(filename)
+        svg_filepath = os.path.join(path, filename + '.svg')
+        target_filepath = os.path.join(path, filename + f'.{filetype}')
+        figure.savefig(svg_filepath, bbox_inches='tight', format='svg')
+        subprocess.call([inkscape_path, svg_filepath, f'--export-{filetype}', target_filepath])
+        # os.remove(svg_filepath)
+
+
+def read_text(name, usecols=None):
+    """
+    Reads a text file
+    :param name: str                            Name of text file in "*.txt" format
+    :return: ndarray                            Read column in np.array format
+    """
+    return np.genfromtxt(name, invalid_raise=False, usecols=usecols)
 
 
 def get_start_time():

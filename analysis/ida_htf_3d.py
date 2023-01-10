@@ -14,33 +14,65 @@ from utils.utils import read_text_file
 
 
 class IDA_HTF_3D:
-    def __init__(self, first_int, incr_step, max_runs, IM_type, T_info, xi, omegas, dt, dcap, gm_dir, gmfileNames,
-                 analysis_type, sections_file, loads_file, materials, system='space', hingeModel='hysteretic',
-                 pflag=True, flag3d=False, export_at_each_step=True):
+    def __init__(self, first_int, incr_step, max_runs, IM_type, T_info, xi, omegas, analysis_time_step, dcap, gm_dir,
+                 gmfileNames, analysis_type, sections_file, loads_file, materials, system='space',
+                 hingeModel='hysteretic', pflag=True, flag3d=False, export_at_each_step=True, use_recorder=True,
+                 recorder_cache=None):
         """
         Initializes IDA
-        :param first_int: float                     The first intensity to run the elastic run (e.g. 0.05g)
-        :param incr_step: float                     The increment used during the hunting phase (e.g. 0.10g)
-        :param max_runs: int                        Maximum number of runs to use (e.g. 20)
-        :param IM_type: int                         Intensity measure with which to conduct IDA
-                                                    1. PGA
-                                                    2. Sa at a given period (e.g. Sa(T1)), geometric mean of two record
-                                                    Sa(T) as the IM
-                                                    3. more to be added
-        :param T_info: list                         List of period info required by specified IM
-                                                    1. [], will ignore any entries if present
-                                                    2. [1.0], single value of period to condition to
-                                                    3. more to be added
-        :param xi: float                            Elastic damping, typically 0.05
-        :param omegas: list                         Circular frequences
-        :param dt: float                            Analysis time step
-        :param dcap: float                          Drift capacity in %
-        :param gmfileNames: List(str)               Filenames containing names_X, names_Y, dt
-        :param gm_dir: str                          Directory containg the Ground Motions
-        :param analysis_type, sections_file, loads_file, materials, system, hingeModel: See client\model.py
-        :param pflag: bool                          Whether print information on screen or not
-        :param flag3d: bool                         True for 3D modelling, False for 2D modelling
-        :param export_at_each_step: bool            Export at each step, i.e. record-run
+        Parameters
+        ----------
+        first_int: float
+            The first intensity to run the elastic run (e.g. 0.05g)
+        incr_step: float
+            The increment used during the hunting phase (e.g. 0.10g)
+        max_runs: int
+            Maximum number of runs to use (e.g. 20)
+        IM_type: int
+            Intensity measure with which to conduct IDA
+                1. PGA
+                2. Sa at a given period (e.g. Sa(T1)), geometric mean of two record
+                Sa(T) as the IM
+                3. more to be added
+        T_info: list[float]
+            List of period info required by specified IM
+                1. [], will ignore any entries if present
+                2. [1.0], single value of period to condition to
+                3. more to be added
+        xi: float
+            Elastic damping, e.g. 0.05
+        omegas: list[float]
+            Circular frequencies
+        analysis_time_step: float
+            Analysis time step
+        dcap: float
+            Drift capacity in %
+        gm_dir: Path
+            Directory containing the Ground Motions
+        gmfileNames: list[str]
+            Filenames containing names_X, names_Y, record_time_step
+        analysis_type:
+            See client\model.py
+        sections_file:
+            See client\model.py
+        loads_file:
+            See client\model.py
+        materials:
+            See client\model.py
+        system:
+            See client\model.py
+        hingeModel:
+            See client\model.py
+        pflag: bool
+            Whether print information on screen or not
+        flag3d: bool
+            True for 3D modelling, False for 2D modelling
+        export_at_each_step: bool
+            Export at each step, i.e. record-run
+        use_recorder: bool
+             Uses openseespy recorder to output file instead of node recorders
+        :param recorder_cache: str
+            Acceleration cache filename, don't leave empty when running multiple analysis or MSA to avoid file rewrites
         """
         self.first_int = first_int
         self.incr_step = incr_step
@@ -49,9 +81,11 @@ class IDA_HTF_3D:
         self.T_info = T_info
         self.xi = xi
         self.omegas = omegas
-        self.dt = dt
+        self.analysis_time_step = analysis_time_step
         self.dcap = dcap
         self.gm_dir = gm_dir
+        self.use_recorder = use_recorder
+        self.recorder_cache = recorder_cache
 
         # For IDA
         self.nmsfile_x = gm_dir / gmfileNames[0]
@@ -261,11 +295,11 @@ class IDA_HTF_3D:
             # Get the ground motion set information
             eq_name_x = self.gm_dir / eqnms_list_x[rec]
             eq_name_y = self.gm_dir / eqnms_list_y[rec]
-            dt = dts_list[rec]
+            record_time_step = dts_list[rec]
             accg_x = read_text_file(eq_name_x)
             accg_y = read_text_file(eq_name_y)
 
-            dur = dt * (len(accg_x) - 1)
+            dur = record_time_step * (len(accg_x) - 1)
             dur = self.EXTRA_DUR + dur
 
             # Establish the IM
@@ -357,18 +391,19 @@ class IDA_HTF_3D:
 
                     # The hunting intensity has been determined, now analysis commences
                     m = self._call_model()
-                    self._time_series(dt, eq_name_x, eq_name_y, sf_x, sf_y)
-                    if self.dt is None:
-                        analysis_time_step = dt
+                    self._time_series(record_time_step, eq_name_x, eq_name_y, sf_x, sf_y)
+                    if self.analysis_time_step is None:
+                        analysis_time_step = record_time_step
                     else:
-                        analysis_time_step = self.dt
+                        analysis_time_step = self.analysis_time_step
 
                     if self.pflag:
                         print(f"[IDA] Record: {rec + 1}; Run: {j}; IM: {IM[j - 1]}")
 
                     # Commence analysis
                     th = SolutionAlgorithm(analysis_time_step, dur, self.dcap, m.g.tnode, m.g.bnode,
-                                           pflag=self.pflag, flag3d=self.flag3d)
+                                           pflag=self.pflag, flag3d=self.flag3d, use_recorder=self.use_recorder,
+                                           recorder_cache=self.recorder_cache)
                     self.outputs[rec][j] = th.ntha_results
 
                     # Export results at each run
@@ -433,12 +468,13 @@ class IDA_HTF_3D:
 
                     # The trace intensity has been determined, now we can analyse
                     m = self._call_model()
-                    self._time_series(dt, eq_name_x, eq_name_y, sf_x, sf_y)
+                    self._time_series(record_time_step, eq_name_x, eq_name_y, sf_x, sf_y)
                     if self.pflag:
                         print(f"[IDA] Record: {rec + 1}; Run: {j}; IM: {IMtr}")
 
                     th = SolutionAlgorithm(analysis_time_step, dur, self.dcap, m.g.tnode, m.g.bnode,
-                                           pflag=self.pflag, flag3d=self.flag3d)
+                                           pflag=self.pflag, flag3d=self.flag3d, use_recorder=self.use_recorder,
+                                           recorder_cache=self.recorder_cache)
                     self.outputs[rec][j] = th.ntha_results
 
                     # Export results at each run
@@ -495,12 +531,13 @@ class IDA_HTF_3D:
                     run = f"Record{rec + 1}_Run{j}"
 
                     m = self._call_model()
-                    self._time_series(dt, eq_name_x, eq_name_y, sf_x, sf_y)
+                    self._time_series(record_time_step, eq_name_x, eq_name_y, sf_x, sf_y)
                     if self.pflag:
                         print(f"[IDA] Record: {rec + 1}; Run: {j}; IM: {IMfil}")
 
                     th = SolutionAlgorithm(analysis_time_step, dur, self.dcap, m.g.tnode, m.g.bnode,
-                                           pflag=self.pflag, flag3d=self.flag3d)
+                                           pflag=self.pflag, flag3d=self.flag3d, use_recorder=self.use_recorder,
+                                           recorder_cache=self.recorder_cache)
                     self.outputs[rec][j] = th.ntha_results
 
                     # Export results at each run

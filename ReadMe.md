@@ -174,9 +174,10 @@ Example 7: 2D model with Haselton springs - exampleHaselton2D.py
 
 * [ ] Quality testing
 * [ ] Haselton hinge models, example
-* [ ] 2D application examples
+* [x] 2D application examples
 * [ ] Elastic models
 * [x] 3D application examples
+* [ ] Update solutionAlgorithm to incorporate interpolation functions (secondary analysis option, not recommended)
 
 
 </details>

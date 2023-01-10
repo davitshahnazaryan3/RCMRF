@@ -34,7 +34,7 @@ if __name__ == "__main__":
         section_file = pickle.load(f)
 
     # GM directory
-    gmdir = main_dir / "record_tem"
+    gmdir = main_dir / "recordsMSA"
 
     # The naming convention must be the same for each intensity levels
     gmfileNames = ["GMR_H1_names.txt", "GMR_H2_names.txt", "GMR_dts.txt"]
